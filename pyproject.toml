@@ -1,0 +1,91 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "openhanji"
+version = "0.1.0"
+description = "Open-source Python parser for Hancom Office HWPX documents"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+authors = [{ name = "SxA Lab", email = "dev@sxa-lab.com" }]
+keywords = ["hwp", "hwpx", "hancom", "korean", "parser", "nlp", "rag"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Text Processing",
+    "Topic :: Text Processing :: Markup :: XML",
+    "Topic :: File Formats",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "click>=8.3.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "build>=1.5.0",
+    "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.15.12",
+    "twine>=6.2.0",
+    "mypy>=2.0.0",
+]
+docs = [
+    "mkdocs-material>=9.7.6",
+    "mkdocstrings[python]>=1.0.4",
+]
+
+[project.scripts]
+openhanji = "openhanji.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/sxa-lab/openhanji"
+Repository = "https://github.com/sxa-lab/openhanji"
+Issues = "https://github.com/sxa-lab/openhanji/issues"
+Documentation = "https://openhanji.readthedocs.io"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/openhanji"]
+
+[tool.hatch.build.targets.sdist]
+only-include = [
+    ".github",
+    "docs",
+    "src",
+    "tests",
+    ".gitignore",
+    ".readthedocs.yaml",
+    "LICENSE",
+    "NOTICE",
+    "README.md",
+    "README.en.md",
+    "README.zh.md",
+    "_config.yml",
+    "mkdocs.yml",
+    "pyproject.toml",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_classes = ["Test*", "Describe*"]
+python_functions = ["test_*", "it_*"]

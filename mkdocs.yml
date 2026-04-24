@@ -1,0 +1,62 @@
+site_name: openhanji
+site_description: Open-source Python parser for Hancom Office HWPX documents.
+site_url: https://openhanji.readthedocs.io/
+repo_url: https://github.com/sxa-lab/openhanji
+repo_name: sxa-lab/openhanji
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    primary: blue grey
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - content.action.edit
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.snippets
+  - tables
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          paths: [src]
+          options:
+            show_source: false
+            show_bases: true
+            show_root_heading: true
+            show_root_full_path: false
+            members_order: source
+            docstring_style: google
+            separate_signature: true
+            show_signature_annotations: true
+            merge_init_into_class: true
+            heading_level: 3
+
+nav:
+  - Home: index.md
+  - Quickstart: usage.md
+  - CLI: cli.md
+  - Format support: formats.md
+  - API reference:
+      - Overview: api/index.md
+      - openhanji: api/openhanji.md
+      - Document model: api/document.md
+      - Parsers: api/parsers.md
+      - Converters: api/converters.md
+      - Exceptions: api/exceptions.md
+      - CLI internals: api/cli.md
+  - Contributing: contributing.md
+  - FAQ: faq.md
