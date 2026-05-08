@@ -1,0 +1,14 @@
+Document file naming (tests/test_files/hwpx/)
+==============================================
+
+sxa_*.hwpx  — Synthetic documents
+    Built programmatically (Python + zipfile) for targeted parser testing on edge-cases and stress-testing.
+    These files are intentionally minimal and cannot be opened in Hancom Office —
+    they lack the full ZIP package metadata and semantic XML that Hancom Office
+    requires (mimetype, META-INF/container.xml, secPr, fully resolved ID tables).
+
+lab_*.hwpx  — Lab (real) documents
+    Created ussing Hancom Office and committed as ground-truth regression files.
+    These reflect the full HWPX structure including proper package metadata, style tables, and numbering
+    definitions. 
+
