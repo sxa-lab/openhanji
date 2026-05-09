@@ -187,7 +187,10 @@ def extract(
     succeeded = failed = skipped = 0
     fmt_ext = _EXT_MAP[fmt]
 
-    with tqdm_mod.tqdm(files, unit="file", desc="Extracting", disable=verbose or not sys.stdout.isatty()) as bar:
+    disable_bar = verbose or not sys.stdout.isatty()
+    with tqdm_mod.tqdm(
+        files, unit="file", desc="Extracting", disable=disable_bar
+    ) as bar:
         for file in bar:
             if verbose:
                 click.echo(f"  {file.name}")
@@ -236,7 +239,12 @@ def _convert(doc: HancomDocument, fmt: str) -> str:
 
 
 @main.command()
-@click.argument("path", type=click.Path(exists=True, file_okay=True, dir_okay=False, path_type=pathlib.Path))
+@click.argument(
+    "path",
+    type=click.Path(
+        exists=True, file_okay=True, dir_okay=False, path_type=pathlib.Path
+    ),
+)
 def info(path: pathlib.Path) -> None:
     """Print title, author, dates, and body counts."""
     try:
