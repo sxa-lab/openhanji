@@ -16,7 +16,7 @@ import pytest
 
 import openhanji
 from openhanji.converters.json import to_json
-from openhanji.exceptions import CorruptedFileError
+from openhanji.exceptions import CorruptedFileError, UnknownRecordError
 from openhanji.models.document import Document, ImageRef, ParagraphStyle
 from tests.integration.builders import assert_block_indices_sequential, make_hwpx, sec
 
@@ -218,6 +218,25 @@ class TestErrorHandling:
         with pytest.raises(CorruptedFileError):
             openhanji.open(path, strict=True)
 
+    def test_unknown_block_element_strict_raises(self, tmp_path):
+        section_xml = sec(
+            "<hp:unknownFutureElement>"
+            "<hp:p><hp:run><hp:t>내용</hp:t></hp:run></hp:p>"
+            "</hp:unknownFutureElement>"
+        )
+        path = make_hwpx(tmp_path, "unknown_strict.hwpx", section_xml)
+        with pytest.raises(UnknownRecordError):
+            openhanji.open(path, strict=True)
+
+    def test_unknown_block_element_non_strict_skips(self, tmp_path):
+        section_xml = sec(
+            "<hp:unknownFutureElement>"
+            "<hp:p><hp:run><hp:t>내용</hp:t></hp:run></hp:p>"
+            "</hp:unknownFutureElement>"
+        )
+        path = make_hwpx(tmp_path, "unknown_nonstrict.hwpx", section_xml)
+        doc = openhanji.open(path, strict=False)
+        assert isinstance(doc, Document)
 
     def test_text_box_gso_text_extracted(self, tmp_path):
         section_xml = sec(
