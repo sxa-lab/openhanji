@@ -11,7 +11,7 @@ import posixpath
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 
-from openhanji.document import ParagraphStyle
+from openhanji.models.document import ParagraphStyle
 
 
 @dataclass
@@ -21,15 +21,15 @@ class CharShape:
     underline: bool = False
     font_size: float | None = None
     color: str | None = None
-    font_face: str | None = None        #Hangul font face
-    font_face_latin: str | None = None  #Latin font face
+    font_face: str | None = None  # Hangul font face
+    font_face_latin: str | None = None  # Latin font face
 
 
 @dataclass
 class ParaShape:
     outline_level: str = ""
-    list_kind: str = ""   # "ordered" | "unordered" | ""
-    align: str = ""       # "left" | "center" | "right" | "justify" | ""
+    list_kind: str = ""  # "ordered" | "unordered" | ""
+    align: str = ""  # "left" | "center" | "right" | "justify" | ""
 
 
 _BULLET_NUM_FORMATS = frozenset({"BULLET", "DISC", "CIRCLE", "SQUARE", "NONE"})
@@ -41,7 +41,7 @@ class HeaderIndex:
     char_shapes: dict[str, CharShape] = field(default_factory=dict)
     para_shapes: dict[str, ParaShape] = field(default_factory=dict)
     styles: dict[str, str] = field(default_factory=dict)
-    #numbering id -> "ordered" | "unordered"
+    # numbering id -> "ordered" | "unordered"
     numbering: dict[str, str] = field(default_factory=dict)
 
 
@@ -76,35 +76,62 @@ _HEADING_STYLES = {
     "6": ParagraphStyle.HEADING6,
 }
 
-#Font faces used as heading/title fonts in Korean documents.
-#These never appear on body-text runs in the corpus.
-_HEADING_FONT_FACES = frozenset({
-    "HY헤드라인M", "HY헤드라인B",
-    "HY울릉도M", "HY견고딕",
-    "바탕",
-})
+# Font faces used as heading/title fonts in Korean documents.
+# These never appear on body-text runs in the corpus.
+_HEADING_FONT_FACES = frozenset(
+    {
+        "HY헤드라인M",
+        "HY헤드라인B",
+        "HY울릉도M",
+        "HY견고딕",
+        "바탕",
+    }
+)
 
-#Fonts that are always body text regardless of size or bold.
-#Short-circuit the heuristic before the size thresholds are checked.
-_BODY_FONT_FACES = frozenset({
-    "맑은 고딕",
-})
+# Fonts that are always body text regardless of size or bold.
+# Short-circuit the heuristic before the size thresholds are checked.
+_BODY_FONT_FACES = frozenset(
+    {
+        "맑은 고딕",
+    }
+)
 
 _SPACE_TAGS = frozenset({"tab", "nbSpace", "fwSpace"})
 
-_SKIP_TAGS = frozenset({
-    "linesegarray", "lineseg", "charShape", "paraShape",
-    "secPr", "borderFill", "fillBrush", "trackChange",
-    "fieldBegin", "fieldEnd", "pageNum",
-    "cellAddr", "cellSpan", "cellSz", "cellMargin",
-    "sz", "pos", "outMargin", "inMargin", "rotationInfo",
-    "orgSz", "curSz", "flip", "offset", "stringParam",
-    "head",
-})
+_SKIP_TAGS = frozenset(
+    {
+        "linesegarray",
+        "lineseg",
+        "charShape",
+        "paraShape",
+        "secPr",
+        "borderFill",
+        "fillBrush",
+        "trackChange",
+        "fieldBegin",
+        "fieldEnd",
+        "pageNum",
+        "cellAddr",
+        "cellSpan",
+        "cellSz",
+        "cellMargin",
+        "sz",
+        "pos",
+        "outMargin",
+        "inMargin",
+        "rotationInfo",
+        "orgSz",
+        "curSz",
+        "flip",
+        "offset",
+        "stringParam",
+        "head",
+    }
+)
 
 _INLINE_OBJECT_TAGS = frozenset({"tbl", "pic", "img", "image"})
 _TEXT_BOX_TAGS = frozenset({"gso", "drawText"})
 
-#Tags whose text content is extracted with a label prefix.
+# Tags whose text content is extracted with a label prefix.
 _NOTE_TAGS = frozenset({"footnote", "endnote"})
 _EQUATION_TAGS = frozenset({"equation", "equationObject", "ole"})

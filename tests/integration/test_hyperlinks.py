@@ -4,6 +4,7 @@ import json
 import pathlib
 
 import openhanji
+from openhanji.converters.json import to_json
 
 TEST_FILES = pathlib.Path(__file__).parent.parent / "test_files"
 FIXTURE = TEST_FILES / "hwpx" / "sxa_hyperlink-field.hwpx"
@@ -11,7 +12,6 @@ BASIC = TEST_FILES / "hwpx" / "sxa_owpml-structure-coverage.hwpx"
 
 
 class DescribeHyperlinkExtraction:
-
     def it_attaches_href_to_linked_runs(self):
         doc = openhanji.open(FIXTURE)
         linked = [r for p in doc.paragraphs for r in p.runs if r.href]
@@ -37,7 +37,6 @@ class DescribeHyperlinkExtraction:
 
 
 class DescribeMarkdownOutput:
-
     def it_renders_link_syntax(self):
         doc = openhanji.open(FIXTURE)
         md = doc.to_markdown()
@@ -57,10 +56,9 @@ class DescribeMarkdownOutput:
 
 
 class DescribeJsonOutput:
-
     def it_includes_href_on_linked_runs(self):
         doc = openhanji.open(FIXTURE)
-        data = json.loads(doc.to_json())
+        data = json.loads(to_json(doc))
         runs = [r for b in data["body"] if b["type"] == "paragraph" for r in b["runs"]]
         linked = [r for r in runs if "href" in r]
         assert len(linked) == 1
@@ -68,7 +66,7 @@ class DescribeJsonOutput:
 
     def it_omits_href_key_from_unlinked_runs(self):
         doc = openhanji.open(FIXTURE)
-        data = json.loads(doc.to_json())
+        data = json.loads(to_json(doc))
         runs = [r for b in data["body"] if b["type"] == "paragraph" for r in b["runs"]]
         unlinked = [r for r in runs if "href" not in r]
         assert len(unlinked) > 0

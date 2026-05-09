@@ -5,7 +5,14 @@ from __future__ import annotations
 import base64
 import html
 
-from openhanji.document import Document, ImageRef, Paragraph, ParagraphStyle, Run, Table
+from openhanji.models.document import (
+    Document,
+    ImageRef,
+    Paragraph,
+    ParagraphStyle,
+    Run,
+    Table,
+)
 
 _HEADING_PREFIX = {
     ParagraphStyle.HEADING1: "#",
@@ -41,21 +48,22 @@ def to_markdown(doc: Document) -> str:
     return "\n\n".join(p for p in parts if p)
 
 
-def _paragraph_to_md(para: Paragraph) -> str:
-    prefix = _HEADING_PREFIX.get(para.style)
+def _paragraph_to_md(paragraph: Paragraph) -> str:
+    prefix = _HEADING_PREFIX.get(paragraph.style)
 
-    if para.runs and any(r.bold or r.italic or r.underline or r.href
-                         for r in para.runs):
-        text = "".join(_run_to_md(r) for r in para.runs).strip()
+    if paragraph.runs and any(
+        r.bold or r.italic or r.underline or r.href for r in paragraph.runs
+    ):
+        text = "".join(_run_to_md(r) for r in paragraph.runs).strip()
     else:
-        text = para.text
+        text = paragraph.text
 
     if prefix:
         return f"{prefix} {text}"
-    if para.style == ParagraphStyle.LIST_UNORDERED:
-        return f"{'  ' * para.level}- {text}"
-    if para.style == ParagraphStyle.LIST_ORDERED:
-        return f"{'  ' * para.level}1. {text}"
+    if paragraph.style == ParagraphStyle.LIST_UNORDERED:
+        return f"{'  ' * paragraph.level}- {text}"
+    if paragraph.style == ParagraphStyle.LIST_ORDERED:
+        return f"{'  ' * paragraph.level}1. {text}"
     return text
 
 
@@ -149,11 +157,11 @@ def _blocks_to_html(blocks: list[Paragraph | Table | ImageRef]) -> str:
     return "".join(parts)
 
 
-def _paragraph_to_html(para: Paragraph) -> str:
-    if para.runs:
-        content = "".join(_run_to_html(run) for run in para.runs)
+def _paragraph_to_html(paragraph: Paragraph) -> str:
+    if paragraph.runs:
+        content = "".join(_run_to_html(run) for run in paragraph.runs)
     else:
-        content = html.escape(para.text)
+        content = html.escape(paragraph.text)
     content = content.replace("\n", "<br />")
     return f"<p>{content}</p>"
 

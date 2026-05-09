@@ -11,13 +11,17 @@ Typical users:
 - **AI / LLM engineers** building RAG pipelines that need to ingest
   legal filings, academic papers, business reports, or any document
   authored in Hancom Office. `to_text()` gives you clean plain text
-  for chunking; `to_json()` gives you the full structured tree for
-  metadata-aware retrieval.
+  for chunking; `openhanji.converters.json.to_json()` gives you the
+  full structured tree for metadata-aware retrieval.
 - **NLP researchers** working with documents in which a significant
   share of the source material is in HWPX format.
 - **Data engineers** building document ingestion pipelines for
   organisations that use Hancom Office as their primary office suite —
   common in public sector, education, legal, and enterprise environments.
+  The CLI is designed for non-interactive batch use: a single command
+  processes an entire directory, per-file errors are logged but never
+  halt the run, and the exit code summarises the full batch so cron jobs
+  and CI pipelines can act on it reliably.
 - **Backend developers** adding HWPX export or preview support to a
   web application or document management system.
 - **AI agents and autonomous pipelines** that need to read, extract, or
@@ -39,12 +43,19 @@ current OOXML-style ZIP + XML format and is fully supported from v0.1.0.
 
 ---
 
-## 3. Why is `metadata.title` always `None`?
+## 3. Why is `metadata.title` often `None`?
 
-The `<dc:title>` field in `header.xml` is rarely populated by Hancom
-Office when saving a document. The title you see in the document window
-is typically just the filename — it is not written into the XML metadata
-unless the author explicitly filled in the document properties panel.
+The parser reads title from `header.xml` (Dublin Core fields) first,
+then falls back to `content.hpf` (the OWPML OPF package file, which
+is the standard metadata location per the `hancom-io/hwpx-owpml-model`
+spec). In practice, `header.xml` is more reliably populated in
+Hancom-saved files, which is why it takes precedence in our parser.
+
+Hancom Office leaves the title field empty in both files unless the
+author explicitly fills in the document properties panel. The title
+shown in the document window is the filename — it is not written into
+the XML metadata unless explicitly set. This is observed behavior
+across many HWPX files, not a formally documented guarantee.
 
 `metadata.created_at`, `metadata.modified_at`, and `metadata.keywords`
 come from `content.hpf` OPF metadata and are reliably present. Use
@@ -90,7 +101,7 @@ for table in doc.tables:
 ```
 
 `cell.text` recursively flattens everything — including nested tables —
-to plain text, which is usually what RAG pipelines want.
+to plain text. Use it for RAG chunking where structure is not needed.
 
 ---
 
@@ -105,18 +116,18 @@ Use `to_markdown()` when structure matters — heading hierarchy, table
 layout, bold emphasis. GFM renders well in most LLM context windows
 and gives the model more to work with than a flat text dump.
 
-Use `to_json()` when you need the full fidelity tree — run-level
+Use `openhanji.converters.json.to_json()` when you need the full
+fidelity tree — run-level
 formatting, paragraph styles, image positions, metadata — for
 structured retrieval, reranking, or custom rendering.
 
 ---
 
-## 7. Why does a table sometimes appear before its heading in `doc.blocks`?
+## 7. Why does a table appear before its heading in `doc.blocks`?
 
 This reflects the order elements appear in the source XML, not a parser
-bug. HWPX documents are sometimes authored with a section heading
-`<hp:p>` placed after the table it introduces in the XML stream. The
-parser faithfully preserves source order.
+bug. Hancom Office can write a section heading `<hp:p>` after the table
+it introduces in the XML stream. The parser preserves source order.
 
 If your pipeline needs heading-before-content order, walk `doc.blocks` and
 reorder heading/table pairs:
@@ -146,8 +157,8 @@ while i < len(doc.blocks):
 
 Yes. The typical integration pattern is a document loader that calls
 `openhanji.open()` and returns chunks from `to_text()` or structured
-nodes from `to_json()`. Neither LangChain nor LlamaIndex has a built-in
-HWPX loader.
+nodes from `openhanji.converters.json.to_json()`. Neither LangChain nor
+LlamaIndex has a built-in HWPX loader.
 
 A minimal LangChain-style loader:
 

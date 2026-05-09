@@ -8,7 +8,34 @@ sxa_*.hwpx  — Synthetic documents
     requires (mimetype, META-INF/container.xml, secPr, fully resolved ID tables).
 
 lab_*.hwpx  — Lab (real) documents
-    Created ussing Hancom Office and committed as ground-truth regression files.
+    Created using Hancom Office and committed as ground-truth regression files.
     These reflect the full HWPX structure including proper package metadata, style tables, and numbering
-    definitions. 
+    definitions.
+
+
+Fixture coverage (openhanji v0.1, 2026-05-10)
+==============================================
+
+Measured with openhanji.open() on each file, no options. Times are single-run
+wall-clock on a dev workstation; treat them as order-of-magnitude, not benchmarks.
+
+File                                      KB   Sec  Para  Tbl  Img  Hdr  Ftr  ms
+-----------------------------------------+----+----+-----+----+----+----+----+------
+lab_business-plan-template.hwpx           222    3    41   61    1    1    1   724
+lab_cv-headings-lists-equation-footer.hwpx 51   1    20    2    0    0    3    89
+lab_fax-hancom.hwpx                        48   1     0    4    0    1    1    28
+lab_marketing-plan.hwpx                    65   1    48    4    1    0    0   100
+lab_service-proposal.hwpx                 69   1    59   21    0    1    0   104
+sxa_business-plan-90p-19tbl-7img.hwpx     24  10    90   19    7    0    0    66
+sxa_font-heading-heuristics.hwpx           2   1     5    0    0    0    0     5
+sxa_header-footer-ctrl.hwpx                2   1     2    0    0    1    1     5
+sxa_hyperlink-field.hwpx                   2   1     2    0    0    0    0     4
+sxa_owpml-structure-coverage.hwpx         14   1    18    2    2    0    0     9
+
+Notes:
+- lab_fax-hancom: 0 paragraphs is correct — the entire document body is tables.
+- sxa_business-plan-90p-19tbl-7img: 10 sections, 90 paragraphs despite 24 KB
+  because it is synthetic (minimal XML, no font/style tables).
+- Parse time scales with table count more than file size; lab_business-plan-template
+  (61 tables) is the slowest lab fixture at ~724 ms, stil less than a second.
 

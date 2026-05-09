@@ -68,11 +68,14 @@ What the v0.1.0 HWPX parser extracts and preserves:
 
 ### Metadata
 
-- `<dc:title>`, `<dc:creator>` from `header.xml` Dublin Core
-  (canonical, but rarely populated in HWPX files).
-- Created / modified dates and keywords from `content.hpf` OPF
-  metadata.
-- Subject when present.
+- Title, author, and subject read from `header.xml` (Dublin Core
+  fields) first. `content.hpf` (the OWPML OPF package file — the
+  standard metadata location in OOXML-style formats) fills in only
+  what `header.xml` left empty. In practice `header.xml` is more
+  reliably populated in Hancom-saved files, which is why it is read
+  first. Both sources are often empty for title and author.
+- Created / modified dates, keywords, and page count from `content.hpf`
+  OPF metadata only — these fields have no equivalent in `header.xml`.
 
 ## Inline content handling
 
@@ -91,10 +94,11 @@ separate structural nodes:
 ## Body ordering
 
 `Document.blocks` preserves the order items appear in the source XML.
-In HWPX files a section heading `<hp:p>` sometimes appears in the XML
-**after** the table it visually precedes. The parser reflects source
-order exactly. Consumers that need heading-before-content order should
-reorder by walking `blocks` and looking ahead for heading/table pairs.
+In HWPX files, a section heading `<hp:p>` can appear in the XML
+**after** the table it visually precedes — this is a quirk of how Hancom
+Office writes section XML. The parser reflects source order exactly.
+To get heading-before-content order, walk `blocks` and look ahead for
+heading/table pairs.
 
 ## Known limitations (v0.1.0)
 
@@ -135,9 +139,9 @@ all binary reads from the zip — `ImageRef` nodes are still present at
 their correct positions but emit `"data": null`.
 
 Headers and footers are included as top-level `"headers"` and `"footers"`
-arrays when non-empty. Each entry follows the same paragraph schema as body
-paragraphs. The keys are omitted entirely when the document has no
-header/footer content.
+arrays when non-empty. Each entry is a serialised block — paragraph,
+table, or image — following the same schema as body blocks. The keys
+are omitted entirely when the document has no header/footer content.
 
 ### Markdown
 

@@ -5,12 +5,20 @@
 """
 
 import pathlib
-import zipfile
 
 import pytest
 
 import openhanji
-from openhanji.document import Cell, Document, Paragraph, ParagraphStyle, Row, Table
+from openhanji.models.document import (
+    Cell,
+    Document,
+    Paragraph,
+    ParagraphStyle,
+    Row,
+    Table,
+)
+
+from tests.integration.builders import make_charpr_hwpx
 
 TEST_FILES = pathlib.Path(__file__).parent.parent / "test_files"
 FONT_FIXTURE = TEST_FILES / "hwpx" / "sxa_font-heading-heuristics.hwpx"
@@ -18,7 +26,6 @@ BASIC = TEST_FILES / "hwpx" / "sxa_owpml-structure-coverage.hwpx"
 
 
 class DescribeParaTextWhitespace:
-
     def it_preserves_leading_whitespace(self):
         doc = openhanji.open(FONT_FIXTURE)
         # " 앞에 공백이 있는 단락" has one leading space
@@ -47,7 +54,6 @@ class DescribeParaTextWhitespace:
 
 
 class DescribeHeadingInference:
-
     def it_infers_h1_from_large_heading_font(self):
         doc = openhanji.open(FONT_FIXTURE)
         h1 = [p for p in doc.paragraphs if p.style == ParagraphStyle.HEADING1]
@@ -78,9 +84,9 @@ class DescribeHeadingInference:
 
 
 class DescribeHasTextRecursion:
-
     def it_does_not_warn_for_nested_table_only_document(self, caplog):
         import logging
+
         # Build a document whose only text is inside a nested table
         inner_cell = Cell(blocks=[Paragraph(text="내부 텍스트", index=0)])
         inner_table = Table(rows=[Row(cells=[inner_cell])], index=0)
@@ -91,6 +97,7 @@ class DescribeHasTextRecursion:
         with caplog.at_level(logging.WARNING, logger="openhanji"):
             # Simulate what _parse_body does after walking
             from openhanji.parsers.hwpx import HwpxParser
+
             parser = HwpxParser()
             has_text = parser._has_text(doc.blocks)
 
@@ -98,6 +105,7 @@ class DescribeHasTextRecursion:
 
     def it_returns_false_for_truly_empty_document(self):
         from openhanji.parsers.hwpx import HwpxParser
+
         empty_cell = Cell(blocks=[])
         table = Table(rows=[Row(cells=[empty_cell])], index=0)
         doc = Document(body=[table])
@@ -105,6 +113,7 @@ class DescribeHasTextRecursion:
 
     def it_finds_text_in_paragraph_blocks_directly(self):
         from openhanji.parsers.hwpx import HwpxParser
+
         doc = Document(body=[Paragraph(text="hello", index=0)])
         assert HwpxParser()._has_text(doc.blocks) is True
 
@@ -113,55 +122,7 @@ class DescribeHasTextRecursion:
 # Parametrized heuristic coverage — inline XML, no document file
 # ---------------------------------------------------------------------------
 
-def _make_heuristic_hwpx(
-    tmp_path: pathlib.Path,
-    font_face: str,
-    font_size_hwpunit: int,  # height in 1/100 pt (e.g. 1800 = 18pt)
-    bold: bool,
-    text: str,
-    name: str = "para.hwpx",
-) -> pathlib.Path:
-    """Build a minimal HWPX whose single paragraph uses the given charPr."""
-    bold_val = "1" if bold else "0"
-    header = (
-        '<?xml version="1.0" encoding="UTF-8"?>'
-        '<hh:head xmlns:hh="http://www.hancom.co.kr/hwpml/2011/head"'
-        ' version="1.5" secCnt="1">'
-        '<hh:beginNum page="1" footnote="1" endnote="1" pic="1" tbl="1" equation="1"/>'
-        '<hh:refList>'
-        '<hh:fontfaces itemCnt="1">'
-        '<hh:fontface lang="HANGUL" fontCnt="1">'
-        f'<hh:font id="0" face="{font_face}"/>'
-        '</hh:fontface>'
-        '</hh:fontfaces>'
-        '<hh:charProperties itemCnt="1">'
-        f'<hh:charPr id="0" height="{font_size_hwpunit}" bold="{bold_val}">'
-        '<hh:fontRef hangul="0" latin="0"/>'
-        '</hh:charPr>'
-        '</hh:charProperties>'
-        '<hh:paraProperties itemCnt="1">'
-        '<hh:paraPr id="0"/>'
-        '</hh:paraProperties>'
-        '<hh:styles itemCnt="0"/>'
-        '</hh:refList>'
-        '</hh:head>'
-    )
-    section = (
-        '<?xml version="1.0" encoding="UTF-8"?>'
-        '<hs:sec xmlns:hs="http://www.hancom.co.kr/hwpml/2011/section"'
-        ' xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph">'
-        '<hp:p paraPrIDRef="0">'
-        '<hp:run charPrIDRef="0">'
-        f'<hp:t>{text}</hp:t>'
-        '</hp:run>'
-        '</hp:p>'
-        '</hs:sec>'
-    )
-    path = tmp_path / name
-    with zipfile.ZipFile(path, "w") as zf:
-        zf.writestr("Contents/header.xml", header)
-        zf.writestr("Contents/section0.xml", section)
-    return path
+
 
 
 class DescribeHeadingHeuristic:
@@ -178,25 +139,25 @@ class DescribeHeadingHeuristic:
         [
             # heading font face — size drives level, bold not required
             # H1 threshold: >= 15pt (primary section headers in real docs use 15pt)
-            ("HY헤드라인M", 20, False, "제목",        ParagraphStyle.HEADING1),
-            ("HY헤드라인M", 18, False, "제목",        ParagraphStyle.HEADING1),
-            ("HY헤드라인M", 16, False, "제목",        ParagraphStyle.HEADING1),
-            ("HY헤드라인M", 15, False, "제목",        ParagraphStyle.HEADING1),
+            ("HY헤드라인M", 20, False, "제목", ParagraphStyle.HEADING1),
+            ("HY헤드라인M", 18, False, "제목", ParagraphStyle.HEADING1),
+            ("HY헤드라인M", 16, False, "제목", ParagraphStyle.HEADING1),
+            ("HY헤드라인M", 15, False, "제목", ParagraphStyle.HEADING1),
             # H2 threshold: 12–13pt subsection headers
-            ("HY헤드라인M", 13, False, "소제목",      ParagraphStyle.HEADING2),
-            ("HY헤드라인M", 12, False, "소소제목",    ParagraphStyle.HEADING2),
-            ("HY헤드라인M", 10, False, "본문 주석",   ParagraphStyle.BODY),
+            ("HY헤드라인M", 13, False, "소제목", ParagraphStyle.HEADING2),
+            ("HY헤드라인M", 12, False, "소소제목", ParagraphStyle.HEADING2),
+            ("HY헤드라인M", 10, False, "본문 주석", ParagraphStyle.BODY),
             # 맑은 고딕 is a body font — never promoted regardless of size or bold
-            ("맑은 고딕",   18, True,  "굵은 제목",   ParagraphStyle.BODY),
-            ("맑은 고딕",   16, True,  "굵은 부제목", ParagraphStyle.BODY),
-            ("맑은 고딕",   18, False, "큰 본문",     ParagraphStyle.BODY),
-            ("맑은 고딕",   16, False, "큰 본문",     ParagraphStyle.BODY),
+            ("맑은 고딕", 18, True, "굵은 제목", ParagraphStyle.BODY),
+            ("맑은 고딕", 16, True, "굵은 부제목", ParagraphStyle.BODY),
+            ("맑은 고딕", 18, False, "큰 본문", ParagraphStyle.BODY),
+            ("맑은 고딕", 16, False, "큰 본문", ParagraphStyle.BODY),
             # body sizes — never heading regardless of bold or face
-            ("HY헤드라인M", 11, True,  "작은 주석",   ParagraphStyle.BODY),
-            ("맑은 고딕",   10, True,  "기본 본문",   ParagraphStyle.BODY),
+            ("HY헤드라인M", 11, True, "작은 주석", ParagraphStyle.BODY),
+            ("맑은 고딕", 10, True, "기본 본문", ParagraphStyle.BODY),
             # paragraph over 120 chars — heuristic must not fire
-            ("HY헤드라인M", 18, False, "가" * 121,   ParagraphStyle.BODY),
-            ("맑은 고딕",   18, True,  "나" * 121,   ParagraphStyle.BODY),
+            ("HY헤드라인M", 18, False, "가" * 121, ParagraphStyle.BODY),
+            ("맑은 고딕", 18, True, "나" * 121, ParagraphStyle.BODY),
         ],
     )
     def it_classifies_correctly(
@@ -208,7 +169,7 @@ class DescribeHeadingHeuristic:
         text: str,
         expected: ParagraphStyle,
     ) -> None:
-        path = _make_heuristic_hwpx(
+        path = make_charpr_hwpx(
             tmp_path,
             font_face=font_face,
             font_size_hwpunit=int(size_pt * 100),

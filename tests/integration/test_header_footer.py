@@ -3,10 +3,9 @@
 import json
 import pathlib
 
-import pytest
-
 import openhanji
-from openhanji.document import Paragraph
+from openhanji.converters.json import to_json
+from openhanji.models.document import Paragraph
 
 TEST_FILES = pathlib.Path(__file__).parent.parent / "test_files"
 HF_FIXTURE = TEST_FILES / "hwpx" / "sxa_header-footer-ctrl.hwpx"
@@ -14,7 +13,6 @@ BASIC_FIXTURE = TEST_FILES / "hwpx" / "sxa_owpml-structure-coverage.hwpx"
 
 
 class DescribeHeaderFooterExtraction:
-
     def it_extracts_header_paragraphs(self):
         doc = openhanji.open(HF_FIXTURE)
         assert len(doc.headers) == 1
@@ -49,29 +47,27 @@ class DescribeHeaderFooterExtraction:
 
 
 class DescribeJsonOutput:
-
     def it_includes_headers_key_when_present(self):
         doc = openhanji.open(HF_FIXTURE)
-        data = json.loads(doc.to_json())
+        data = json.loads(to_json(doc))
         assert "headers" in data
         assert len(data["headers"]) == 1
         assert data["headers"][0]["text"] == "OpenHanji Test Header"
 
     def it_includes_footers_key_when_present(self):
         doc = openhanji.open(HF_FIXTURE)
-        data = json.loads(doc.to_json())
+        data = json.loads(to_json(doc))
         assert "footers" in data
         assert data["footers"][0]["text"] == "Page 1"
 
     def it_omits_headers_key_when_absent(self):
         doc = openhanji.open(BASIC_FIXTURE)
-        data = json.loads(doc.to_json())
+        data = json.loads(to_json(doc))
         assert "headers" not in data
         assert "footers" not in data
 
 
 class DescribeMarkdownOutput:
-
     def it_emits_header_comment_before_body(self):
         doc = openhanji.open(HF_FIXTURE)
         md = doc.to_markdown()
@@ -96,7 +92,6 @@ class DescribeMarkdownOutput:
 
 
 class DescribeTextOutput:
-
     def it_emits_header_label_before_body(self):
         doc = openhanji.open(HF_FIXTURE)
         text = doc.to_text()

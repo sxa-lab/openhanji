@@ -14,9 +14,9 @@ stack.
 - **Typed document model.** `Document`, `Paragraph`, `Run`, `Table`, `Cell`,
   `ImageRef`, `Metadata` — plain dataclasses, fully type-checked under
   `mypy --strict`.
-- **Three output formats.** `to_json()` (full fidelity), `to_markdown()`
-  (GFM + HTML fallback for complex tables), `to_text()` (recursive
-  plain-text extraction).
+- **Three output formats.** `openhanji.converters.json.to_json()`
+  (full fidelity), `to_markdown()` (GFM + HTML fallback for complex
+  tables), `to_text()` (recursive plain-text extraction).
 - **Never crashes on unknown content.** Unknown XML is skipped and
   logged at `WARNING`. Pass `strict=True` to escalate to exceptions.
 - **Format-native.** Hangul font faces are resolved from `header.xml` and

@@ -9,7 +9,8 @@ import xml.etree.ElementTree as ET
 import zipfile
 from datetime import datetime
 
-from openhanji.document import (
+from openhanji.exceptions import CorruptedFileError, UnknownRecordError
+from openhanji.models.document import (
     Cell,
     Document,
     ImageRef,
@@ -21,7 +22,6 @@ from openhanji.document import (
     Section,
     Table,
 )
-from openhanji.exceptions import CorruptedFileError
 from openhanji.parsers.base import BaseParser
 from openhanji.parsers.hwpx_support import (
     _BODY_FONT_FACES,
@@ -48,7 +48,6 @@ logger = logging.getLogger(__name__)
 
 
 class HwpxParser(BaseParser):
-
     def parse(self, path: pathlib.Path) -> Document:
         try:
             with zipfile.ZipFile(path, "r") as zf:
@@ -60,7 +59,7 @@ class HwpxParser(BaseParser):
                 return doc
         except zipfile.BadZipFile as exc:
             raise CorruptedFileError(f"Not a valid HWPX file: {path}") from exc
-        except CorruptedFileError:
+        except (CorruptedFileError, UnknownRecordError):
             raise
         except Exception as exc:
             raise CorruptedFileError(f"Failed to parse {path}: {exc}") from exc
@@ -92,10 +91,14 @@ class HwpxParser(BaseParser):
         visit_blocks(doc.blocks)
 
     def _parse_metadata(self, zf: zipfile.ZipFile, names: list[str]) -> Metadata:
+        """Build Metadata from header.xml and content.hpf.
+
+        header.xml is read first for title, author, and subject; content.hpf
+        fills in only what header.xml left empty. Dates, keywords, and page
+        count come from content.hpf exclusively.
+        """
         meta = Metadata()
 
-        #header.xml (hh:head / Dublin Core) is the fallback source for
-        #title and author when content.hpf does not provide them.
         header = next((n for n in names if n.endswith("header.xml")), None)
         if header:
             try:
@@ -115,7 +118,7 @@ class HwpxParser(BaseParser):
             except ET.ParseError as exc:
                 logger.warning("Could not parse header.xml: %s", exc)
 
-        #content.hpf (OPF) holds title, author, subject, dates, and keywords.
+        # content.hpf (OPF) holds title, author, subject, dates, and keywords.
         hpf = next((n for n in names if n.endswith("content.hpf")), None)
         if hpf:
             try:
@@ -162,9 +165,7 @@ class HwpxParser(BaseParser):
 
         return meta
 
-    def _parse_body(
-        self, zf: zipfile.ZipFile, names: list[str]
-    ) -> list[Section]:
+    def _parse_body(self, zf: zipfile.ZipFile, names: list[str]) -> list[Section]:
         package = self._parse_package(zf, names)
         bindata = self._index_bindata(zf, names)
         header_index = self._index_header(zf, names)
@@ -196,13 +197,15 @@ class HwpxParser(BaseParser):
                 logger.warning("Could not parse %s: %s", section_path, exc)
                 if self.strict:
                     raise CorruptedFileError(f"Parse error in {section_path}") from exc
-            sections.append(Section(
-                blocks=blocks,
-                headers=headers,
-                footers=footers,
-                index=sec_idx,
-                source_path=section_path,
-            ))
+            sections.append(
+                Section(
+                    blocks=blocks,
+                    headers=headers,
+                    footers=footers,
+                    index=sec_idx,
+                    source_path=section_path,
+                )
+            )
 
         all_blocks = [b for s in sections for b in s.blocks]
         if not self._has_text(all_blocks):
@@ -277,7 +280,7 @@ class HwpxParser(BaseParser):
         for name in names:
             if not name.lower().startswith("bindata/"):
                 continue
-            stem = name.rsplit("/", 1)[-1] 
+            stem = name.rsplit("/", 1)[-1]
             ext = stem.rsplit(".", 1)[-1].lower() if "." in stem else ""
             stem_no_ext = stem.rsplit(".", 1)[0] if "." in stem else stem
             m = re.search(r"(\d+)", stem_no_ext)
@@ -286,9 +289,9 @@ class HwpxParser(BaseParser):
             except Exception as exc:
                 logger.warning("Could not read BinData entry %s: %s", name, exc)
                 continue
-            #Index by full stem to match Hancom HWPX binaryItemIDRef values.
+            # Index by full stem to match Hancom HWPX binaryItemIDRef values.
             index[stem_no_ext] = (data, ext)
-            #Also index by bare numeric id for synthetic fixtures.
+            # Also index by bare numeric id for synthetic fixtures.
             if m:
                 index[str(int(m.group(1)))] = (data, ext)
         return index
@@ -348,15 +351,19 @@ class HwpxParser(BaseParser):
                         if font_face is None:
                             font_face = font_face_latin
                     index.char_shapes[cid] = CharShape(
-                        bold=bold, italic=italic, underline=underline,
-                        font_size=font_size, color=color,
-                        font_face=font_face, font_face_latin=font_face_latin,
+                        bold=bold,
+                        italic=italic,
+                        underline=underline,
+                        font_size=font_size,
+                        color=color,
+                        font_face=font_face,
+                        font_face_latin=font_face_latin,
                     )
                 elif tag == "numbering":
                     nid = elem.get("id")
                     if nid is None:
                         continue
-                    #Inspect the first paraHead to determine ordered vs unordered.
+                    # Inspect the first paraHead to determine ordered vs unordered.
                     first_head = elem.find(".//{*}paraHead")
                     if first_head is not None:
                         nfmt = first_head.get("numFormat", "DIGIT")
@@ -386,8 +393,8 @@ class HwpxParser(BaseParser):
                     align_elem = elem.find(".//{*}align")
                     if align_elem is not None:
                         align = align_elem.get("horizontal", "")
-                    #Prefer hh:heading(type="OUTLINE"), then fall back to
-                    #the paraPr outlineLevel attribute.
+                    # Prefer hh:heading(type="OUTLINE"), then fall back to
+                    # the paraPr outlineLevel attribute.
                     outline_level = elem.get("outlineLevel", "")
                     heading_child = elem.find(".//{*}heading")
                     if heading_child is not None:
@@ -440,7 +447,10 @@ class HwpxParser(BaseParser):
         return int(m.group(1)) if m else 999
 
     def _walk(
-        self, elem: ET.Element, body: list[Paragraph | Table | ImageRef], index: int,
+        self,
+        elem: ET.Element,
+        body: list[Paragraph | Table | ImageRef],
+        index: int,
         bindata: dict[str, tuple[bytes, str]] | None = None,
         header_index: HeaderIndex | None = None,
         headers: list[Paragraph | Table | ImageRef] | None = None,
@@ -478,6 +488,11 @@ class HwpxParser(BaseParser):
                     body.append(image)
                     index += 1
             else:
+                if self.strict:
+                    parent = _strip_ns(elem.tag)
+                    raise UnknownRecordError(
+                        f"Unrecognised block element <{tag}> inside <{parent}>"
+                    )
                 index = self._walk(
                     child, body, index, bindata, header_index, headers, footers
                 )
@@ -520,7 +535,10 @@ class HwpxParser(BaseParser):
                             index += 1
 
     def _process_p(
-        self, p: ET.Element, body: list[Paragraph | Table | ImageRef], index: int,
+        self,
+        p: ET.Element,
+        body: list[Paragraph | Table | ImageRef],
+        index: int,
         bindata: dict[str, tuple[bytes, str]] | None = None,
         header_index: HeaderIndex | None = None,
         headers: list[Paragraph | Table | ImageRef] | None = None,
@@ -558,39 +576,43 @@ class HwpxParser(BaseParser):
                 runs.clear()
                 text_parts.clear()
                 return
-            blocks.append(Paragraph(
-                text=text,
-                style=style,
-                level=level,
-                runs=list(runs),
-                index=0,
-                align=align,
-                style_name=style_name,
-            ))
+            blocks.append(
+                Paragraph(
+                    text=text,
+                    style=style,
+                    level=level,
+                    runs=list(runs),
+                    index=0,
+                    align=align,
+                    style_name=style_name,
+                )
+            )
             runs.clear()
             text_parts.clear()
 
-        #field_id -> URL for currently open HYPERLINK spans
+        # field_id -> URL for currently open HYPERLINK spans
         active_hrefs: dict[str, str] = {}
 
         def _current_href() -> str | None:
-            #Return the most recently opened still-active hyperlink.
+            # Return the most recently opened still-active hyperlink.
             return next(reversed(active_hrefs.values()), None) if active_hrefs else None
 
         def append_text(text: str, fmt: CharShape | None) -> None:
             if not text:
                 return
             shape = fmt or CharShape()
-            runs.append(Run(
-                text=text,
-                bold=shape.bold,
-                italic=shape.italic,
-                underline=shape.underline,
-                font_size=shape.font_size,
-                color=shape.color,
-                font_face=shape.font_face,
-                href=_current_href(),
-            ))
+            runs.append(
+                Run(
+                    text=text,
+                    bold=shape.bold,
+                    italic=shape.italic,
+                    underline=shape.underline,
+                    font_size=shape.font_size,
+                    color=shape.color,
+                    font_face=shape.font_face,
+                    href=_current_href(),
+                )
+            )
             text_parts.append(text)
 
         def _handle_ctrl(ctrl_elem: ET.Element) -> None:
@@ -674,7 +696,10 @@ class HwpxParser(BaseParser):
         return f"[수식: {text}]" if text else "[수식]"
 
     def _collect_text(
-        self, elem: ET.Element, text_parts: list[str], runs: list[Run],
+        self,
+        elem: ET.Element,
+        text_parts: list[str],
+        runs: list[Run],
         char_shapes: dict[str, CharShape] | None = None,
         _run_fmt: CharShape | None = None,
     ) -> None:
@@ -690,18 +715,24 @@ class HwpxParser(BaseParser):
                 self._collect_text(child, text_parts, runs, char_shapes, fmt)
             elif tag == "t" and child.text:
                 fmt = _run_fmt or CharShape()
-                runs.append(Run(
-                    text=child.text,
-                    bold=fmt.bold, italic=fmt.italic, underline=fmt.underline,
-                    font_size=fmt.font_size, color=fmt.color, font_face=fmt.font_face,
-                ))
+                runs.append(
+                    Run(
+                        text=child.text,
+                        bold=fmt.bold,
+                        italic=fmt.italic,
+                        underline=fmt.underline,
+                        font_size=fmt.font_size,
+                        color=fmt.color,
+                        font_face=fmt.font_face,
+                    )
+                )
                 text_parts.append(child.text)
             elif tag == "lineBreak":
                 text_parts.append("\n")
             elif tag in _SPACE_TAGS:
                 text_parts.append(" ")
             elif tag in _TEXT_BOX_TAGS:
-                #Text boxes keep paragraph structure internally; inline the text here.
+                # Text boxes keep paragraph structure internally; inline the text here.
                 gso_parts: list[str] = []
                 self._collect_text(child, gso_parts, [], char_shapes)
                 if gso_parts:
@@ -710,7 +741,7 @@ class HwpxParser(BaseParser):
                         runs.append(Run(text=text))
                         text_parts.append(text)
             elif tag in _NOTE_TAGS:
-                #Inline footnotes and endnotes at the reference point.
+                # Inline footnotes and endnotes at the reference point.
                 note_parts: list[str] = []
                 self._collect_text(child, note_parts, [], char_shapes)
                 text = "".join(note_parts).strip()
@@ -719,7 +750,7 @@ class HwpxParser(BaseParser):
                     runs.append(Run(text=note))
                     text_parts.append(note)
             elif tag in _EQUATION_TAGS:
-                #Preserve any readable equation text as a placeholder run.
+                # Preserve any readable equation text as a placeholder run.
                 eq = self._equation_placeholder(child)
                 runs.append(Run(text=eq))
                 text_parts.append(eq)
@@ -790,9 +821,7 @@ class HwpxParser(BaseParser):
                 return ParagraphStyle.LIST_ORDERED
             if list_kind == "unordered":
                 return ParagraphStyle.LIST_UNORDERED
-        combined_for_list = (
-            (p.get("styleIDRef", "") or p.get("styleId", "")).lower()
-        )
+        combined_for_list = (p.get("styleIDRef", "") or p.get("styleId", "")).lower()
         if "list" in combined_for_list or "bullet" in combined_for_list:
             return ParagraphStyle.LIST_UNORDERED
         if self.heading_detection == "auto" and header_index:
@@ -814,7 +843,7 @@ class HwpxParser(BaseParser):
         Only fires on short paragraphs (< 120 chars) to avoid false positives
         on body sentences that happen to share a font face.
         """
-        #Collect all charPrIDRef references used by this paragraph's runs.
+        # Collect all charPrIDRef references used by this paragraph's runs.
         sizes: list[float] = []
         is_heading_face = False
         is_body_face = False
@@ -852,11 +881,11 @@ class HwpxParser(BaseParser):
                 return ParagraphStyle.HEADING1
             if max_size >= 12:
                 return ParagraphStyle.HEADING2
-            #Heading face below 12pt is usually annotation-sized, not a heading.
+            # Heading face below 12pt is usually annotation-sized, not a heading.
             return None
-        #Without a heading face, size alone is ambiguous; require bold too.
-        #10-11pt is Hancom's default body size, but some templates use
-        #16pt non-bold body text.
+        # Without a heading face, size alone is ambiguous; require bold too.
+        # 10-11pt is Hancom's default body size, but some templates use
+        # 16pt non-bold body text.
         if not is_bold:
             return None
         if max_size >= 18:
@@ -866,7 +895,9 @@ class HwpxParser(BaseParser):
         return None
 
     def _parse_table(
-        self, tbl: ET.Element, index: int,
+        self,
+        tbl: ET.Element,
+        index: int,
         bindata: dict[str, tuple[bytes, str]] | None = None,
         header_index: HeaderIndex | None = None,
     ) -> Table | None:
@@ -879,7 +910,7 @@ class HwpxParser(BaseParser):
             for tc in tr:
                 if _strip_ns(tc.tag) != "tc":
                     continue
-                #Cell spans live on a child <cellSpan>, not on <tc> itself.
+                # Cell spans live on a child <cellSpan>, not on <tc> itself.
                 col_span = 1
                 row_span = 1
                 for child in tc:
@@ -888,11 +919,13 @@ class HwpxParser(BaseParser):
                         row_span = int(child.get("rowSpan", "1") or "1")
                         break
                 blocks = self._parse_cell_blocks(tc, bindata, header_index)
-                cells.append(Cell(
-                    col_span=col_span,
-                    row_span=row_span,
-                    blocks=blocks,
-                ))
+                cells.append(
+                    Cell(
+                        col_span=col_span,
+                        row_span=row_span,
+                        blocks=blocks,
+                    )
+                )
             if cells:
                 rows.append(Row(cells=cells))
 
@@ -949,7 +982,9 @@ class HwpxParser(BaseParser):
         return False
 
     def _parse_image(
-        self, elem: ET.Element, index: int,
+        self,
+        elem: ET.Element,
+        index: int,
         bindata: dict[str, tuple[bytes, str]] | None = None,
     ) -> ImageRef | None:
         caption = elem.get("caption") or elem.get("title")
@@ -984,7 +1019,10 @@ class HwpxParser(BaseParser):
             pass
 
         return ImageRef(
-            index=index, caption=caption,
-            width=width, height=height,
-            data=data, format=fmt,
+            index=index,
+            caption=caption,
+            width=width,
+            height=height,
+            data=data,
+            format=fmt,
         )

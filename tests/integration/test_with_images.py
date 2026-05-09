@@ -4,16 +4,17 @@ import json
 import pathlib
 import zipfile
 
+from click.testing import CliRunner
+
 import openhanji
 from openhanji.cli import main
-from click.testing import CliRunner
+from openhanji.converters.json import to_json
 
 TEST_FILES = pathlib.Path(__file__).parent.parent / "test_files"
 BUSINESS = TEST_FILES / "hwpx" / "sxa_business-plan-90p-19tbl-7img.hwpx"
 
 
 class DescribeDefaultBehavior:
-
     def it_produces_no_image_data_by_default(self):
         doc = openhanji.open(BUSINESS)
         assert doc.images
@@ -35,14 +36,13 @@ class DescribeDefaultBehavior:
 
     def it_emits_null_data_in_json_by_default(self):
         doc = openhanji.open(BUSINESS)
-        data = json.loads(doc.to_json())
+        data = json.loads(to_json(doc))
         images = [b for b in data["body"] if b["type"] == "image"]
         assert images
         assert all(b["data"] is None for b in images)
 
 
 class DescribeWithImagesEnabled:
-
     def it_loads_image_binaries(self):
         doc = openhanji.open(BUSINESS, with_images=True)
         assert any(img.data is not None for img in doc.images)
@@ -58,45 +58,50 @@ class DescribeWithImagesEnabled:
 
     def it_emits_base64_data_in_json(self):
         doc = openhanji.open(BUSINESS, with_images=True)
-        data = json.loads(doc.to_json())
+        data = json.loads(to_json(doc))
         images = [b for b in data["body"] if b["type"] == "image"]
         assert any(isinstance(b["data"], str) for b in images)
 
 
 class DescribeCliWithImagesFlag:
-
     def it_produces_no_data_uri_by_default(self):
         runner = CliRunner()
-        result = runner.invoke(main, ["extract", str(BUSINESS), "-f", "markdown"])
-        assert result.exit_code == 0
-        assert "data:image/" not in result.output
+        with runner.isolated_filesystem():
+            result = runner.invoke(main, ["extract", str(BUSINESS), "-f", "markdown"])
+            assert result.exit_code == 0
+            content = list(pathlib.Path(".").glob("*.md"))[0].read_text()
+            assert "data:image/" not in content
 
     def it_produces_data_uri_with_flag(self):
         runner = CliRunner()
-        result = runner.invoke(
-            main, ["extract", str(BUSINESS), "-f", "markdown", "--with-images"]
-        )
-        assert result.exit_code == 0
-        assert "data:image/" in result.output
+        with runner.isolated_filesystem():
+            result = runner.invoke(
+                main, ["extract", str(BUSINESS), "-f", "markdown", "--with-images"]
+            )
+            assert result.exit_code == 0
+            content = list(pathlib.Path(".").glob("*.md"))[0].read_text()
+            assert "data:image/" in content
 
     def it_json_default_has_null_data(self):
         runner = CliRunner()
-        result = runner.invoke(main, ["extract", str(BUSINESS), "-f", "json"])
-        assert result.exit_code == 0
-        data = json.loads(result.output)
-        images = [b for b in data["body"] if b["type"] == "image"]
-        assert images
-        assert all(b["data"] is None for b in images)
+        with runner.isolated_filesystem():
+            result = runner.invoke(main, ["extract", str(BUSINESS), "-f", "json"])
+            assert result.exit_code == 0
+            data = json.loads(list(pathlib.Path(".").glob("*.json"))[0].read_text())
+            images = [b for b in data["body"] if b["type"] == "image"]
+            assert images
+            assert all(b["data"] is None for b in images)
 
     def it_json_with_flag_has_base64_data(self):
         runner = CliRunner()
-        result = runner.invoke(
-            main, ["extract", str(BUSINESS), "-f", "json", "--with-images"]
-        )
-        assert result.exit_code == 0
-        data = json.loads(result.output)
-        images = [b for b in data["body"] if b["type"] == "image"]
-        assert any(isinstance(b["data"], str) for b in images)
+        with runner.isolated_filesystem():
+            result = runner.invoke(
+                main, ["extract", str(BUSINESS), "-f", "json", "--with-images"]
+            )
+            assert result.exit_code == 0
+            data = json.loads(list(pathlib.Path(".").glob("*.json"))[0].read_text())
+            images = [b for b in data["body"] if b["type"] == "image"]
+            assert any(isinstance(b["data"], str) for b in images)
 
 
 def _make_two_image_hwpx(tmp_path: pathlib.Path) -> pathlib.Path:
@@ -109,19 +114,19 @@ def _make_two_image_hwpx(tmp_path: pathlib.Path) -> pathlib.Path:
         '<hh:head xmlns:hh="http://www.hancom.co.kr/hwpml/2011/head"'
         ' version="1.5" secCnt="1">'
         '<hh:beginNum page="1" footnote="1" endnote="1" pic="1" tbl="1" equation="1"/>'
-        '<hh:refList>'
+        "<hh:refList>"
         '<hh:fontfaces itemCnt="0"/>'
         '<hh:charProperties itemCnt="1">'
         '<hh:charPr id="0" height="1000"><hh:fontRef hangul="0" latin="0"/></hh:charPr>'
-        '</hh:charProperties>'
+        "</hh:charProperties>"
         '<hh:paraProperties itemCnt="1"><hh:paraPr id="0"/></hh:paraProperties>'
         '<hh:styles itemCnt="0"/>'
         '<hh:binData itemCnt="2">'
         '<hh:binItem id="1" type="EMBED" format="png" name="BIN0001.png"/>'
         '<hh:binItem id="2" type="EMBED" format="png" name="BIN0002.png"/>'
-        '</hh:binData>'
-        '</hh:refList>'
-        '</hh:head>'
+        "</hh:binData>"
+        "</hh:refList>"
+        "</hh:head>"
     )
     # Two cells, each containing one picture inline object (no ctrl wrapper)
     section = (
@@ -131,19 +136,19 @@ def _make_two_image_hwpx(tmp_path: pathlib.Path) -> pathlib.Path:
         ' xmlns:ht="http://www.hancom.co.kr/hwpml/2011/table">'
         '<hp:p paraPrIDRef="0">'
         '<hp:run charPrIDRef="0">'
-        '<ht:tbl>'
-        '<ht:tr>'
+        "<ht:tbl>"
+        "<ht:tr>"
         '<ht:tc><hp:p paraPrIDRef="0"><hp:run charPrIDRef="0">'
         '<hp:pic><hp:img binaryItemIDRef="1" width="1000" height="1000"/></hp:pic>'
-        '</hp:run></hp:p></ht:tc>'
+        "</hp:run></hp:p></ht:tc>"
         '<ht:tc><hp:p paraPrIDRef="0"><hp:run charPrIDRef="0">'
         '<hp:pic><hp:img binaryItemIDRef="2" width="1000" height="1000"/></hp:pic>'
-        '</hp:run></hp:p></ht:tc>'
-        '</ht:tr>'
-        '</ht:tbl>'
-        '</hp:run>'
-        '</hp:p>'
-        '</hs:sec>'
+        "</hp:run></hp:p></ht:tc>"
+        "</ht:tr>"
+        "</ht:tbl>"
+        "</hp:run>"
+        "</hp:p>"
+        "</hs:sec>"
     )
     path = tmp_path / "two_images.hwpx"
     with zipfile.ZipFile(path, "w") as zf:
@@ -156,7 +161,8 @@ def _make_two_image_hwpx(tmp_path: pathlib.Path) -> pathlib.Path:
 
 def _collect_cell_images(doc) -> list:
     """Collect all ImageRef nodes from inside table cells (not just top-level)."""
-    from openhanji.document import ImageRef, Table
+    from openhanji.models.document import ImageRef, Table
+
     images = []
     for item in doc.blocks:
         if isinstance(item, Table):
