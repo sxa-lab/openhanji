@@ -27,6 +27,7 @@ classifiers = [
 requires-python = ">=3.10"
 dependencies = [
     "click>=8.3.3",
+    "tqdm>=4.64",
 ]
 
 [project.optional-dependencies]
@@ -87,5 +88,6 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 python_classes = ["Test*", "Describe*"]
 python_functions = ["test_*", "it_*"]
