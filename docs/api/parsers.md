@@ -1,12 +1,81 @@
 # Parsers
 
-The parser layer turns a file on disk into a [`Document`](document.md#document).
+The parser layer turns a file on disk into a `HancomDocument`.
 
 For most users, [`openhanji.open()`](openhanji.md#open) is all you need —
 it dispatches to the correct parser and returns the document. The
 classes here are documented for contributors and embedders who need
 to drive parsing directly (e.g. running multiple parsers in parallel
 threads, or providing a pre-opened file handle).
+
+## `HancomDocument`
+
+::: openhanji.parsers.base.HancomDocument
+
+A `@runtime_checkable` `Protocol` satisfied by every document model
+returned by `openhanji.open()`. It is the declared return type of
+`openhanji.open()` and `BaseParser.parse()`.
+
+Importable directly from the top-level package:
+
+```python
+import openhanji
+
+doc = openhanji.open("file.hwpx")
+assert isinstance(doc, openhanji.HancomDocument)   # True at runtime
+```
+
+The protocol guarantees these members on every returned document:
+
+| Member           | Type                          | Notes                                                              |
+| ---------------- | ----------------------------- | ------------------------------------------------------------------ |
+| `metadata`       | [`HancomMetadata`](#hancommetadata) | Title, author, dates, keywords, page count.                  |
+| `paragraphs`     | `Sequence[object]`            | All paragraphs, flattened across sections.                         |
+| `tables`         | `Sequence[object]`            | All top-level tables, flattened across sections.                   |
+| `images`         | `Sequence[object]`            | All top-level image refs, flattened across sections.               |
+| `to_markdown()`  | `str`                         | GFM output.                                                        |
+| `to_text()`      | `str`                         | Plain text output.                                                 |
+
+`to_json()` is **not** part of the protocol — it is a standalone
+converter function (`openhanji.converters.json.to_json()`) that accepts
+a `Document` instance.
+
+---
+
+## `HancomMetadata`
+
+::: openhanji.parsers.base.HancomMetadata
+
+A `@runtime_checkable` `Protocol` satisfied by every metadata object
+on a `HancomDocument`. Accessed via `doc.metadata`.
+
+| Property      | Type                  | Notes                                                         |
+| ------------- | --------------------- | ------------------------------------------------------------- |
+| `title`       | `str \| None`         | Document title from OPF / Dublin Core. Commonly `None`.       |
+| `author`      | `str \| None`         | Creator field. Often the OS username.                         |
+| `subject`     | `str \| None`         | Subject / description field.                                  |
+| `keywords`    | `Sequence[str]`       | Keywords split on commas and newlines. Empty list when absent.|
+| `created_at`  | `datetime \| None`    | Creation timestamp from `content.hpf`.                        |
+| `modified_at` | `datetime \| None`    | Last-modified timestamp from `content.hpf`.                   |
+| `page_count`  | `int \| None`         | Page count from `content.hpf`. `None` when absent.            |
+
+---
+
+## `HeadingDetection`
+
+`HeadingDetection = Literal["auto", "structural", "none"]`
+
+Importable from `openhanji.parsers.base`. Accepted by `openhanji.open()`,
+`BaseParser.__init__()`, and `HwpxParser`. Controls how the parser
+classifies paragraph styles:
+
+| Value          | Behaviour                                                                                     |
+| -------------- | --------------------------------------------------------------------------------------------- |
+| `"auto"`       | Structural signals first (`outlineLevel`, style name), then font/size heuristic as fallback.  |
+| `"structural"` | Structural signals only; font heuristic is skipped.                                           |
+| `"none"`       | All paragraphs are forced to `BODY` — no heading detection at all.                            |
+
+---
 
 ## `BaseParser`
 
@@ -17,11 +86,11 @@ narrow:
 
 - `__init__(self, strict: bool = False, with_images: bool = False, heading_detection: str = "auto")` —
   accepts the strict, with_images, and heading_detection flags.
-- `parse(self, path: pathlib.Path) -> Document` — parses the file at
-  `path` and returns a `Document`. Must raise an
+- `parse(self, path: pathlib.Path) -> HancomDocument` — parses the
+  file at `path` and returns a `HancomDocument`. Must raise an
   [`OpenHanjiError`](exceptions.md#openhanjierror) subclass on
-  recoverable failure; system-level errors (e.g. `OSError`, broken
-  zip) may propagate unwrapped.
+  failure; `HwpxParser` wraps unexpected exceptions as
+  `CorruptedFileError`.
 
 `strict`, `with_images`, and `heading_detection` are stored on `self`
 and read by subclasses. `with_images=False` (the default) skips all
@@ -53,22 +122,28 @@ The HWPX implementation. Opens the HWPX as a zip, indexes
 ### Pipeline
 
 1. **Open the zip.** Raise [`CorruptedFileError`](exceptions.md#corruptedfileerror)
-   if the file is not a valid zip or required parts are missing.
-2. **Read `content.hpf`** for OPF metadata: title (`<opf:title>`),
+   if the file is not a valid zip.
+2. **Read `header.xml`** for title, creator/author, and subject —
+   Dublin Core fields, matched by local element name after namespace
+   stripping. Also builds the [`HeaderIndex`](#headerindex): font face
+   table, char shapes table, para shapes table, styles table.
+   `header.xml` is read first because it is more reliably populated in
+   Hancom-saved files than `content.hpf`, even though the OWPML model
+   (`hancom-io/hwpx-owpml-model`) designates `content.hpf` as the
+   canonical OPF metadata location.
+3. **Read `content.hpf`** for OPF metadata: title (`<opf:title>`),
    author (`<opf:meta name="creator">`), subject (`<opf:meta name="subject">`),
-   dates, and keywords (split on commas and newlines).
-3. **Read `header.xml`** for Dublin Core (`<dc:title>`, `<dc:creator>`,
-   `<dc:subject>`) as a fallback when `content.hpf` leaves those fields
-   empty. Also builds the [`HeaderIndex`](#headerindex):
-   font face table, char shapes table, para shapes table, styles table.
+   dates, and keywords (split on commas and newlines). Title, author,
+   and subject from `content.hpf` fill in only if `header.xml` left
+   those fields empty — `header.xml` wins when both have a value.
 4. **Walk sections** in numeric order. For each `<hp:p>`, build a
    `Paragraph`, group consecutive `<hp:t>` nodes into `Run` objects
    keyed by `charPrIDRef`, attach character formatting from the
    `charPr` index, and resolve paragraph style/alignment from the
    `paraPr` and styles indices. Paragraph style detection runs four
-   paths in order: `hh:heading` child element → `outlineLevel`
-   attribute → styleIDRef name → font heuristic (display font face +
-   size threshold, short paragraphs only).
+   paths in order: `heading` child element, then `outlineLevel`
+   attribute, then styleIDRef name matching a heading pattern, then
+   font heuristic (display font face + size threshold, short paragraphs only).
 5. **Inline tables and images.** OWPML allows `<hp:tbl>` and
    `<hp:pic>` to appear inline inside `<hp:p><hp:run>`. The walker
    emits these as separate top-level `Table` / `ImageRef` nodes at
@@ -116,49 +191,3 @@ parts, and zip-level errors raise
 [`CorruptedFileError`](exceptions.md#corruptedfileerror) regardless of
 the strict flag.
 
----
-
-## Internal helpers
-
-These are not public API — their signatures may change without a
-major version bump. Documented here for contributors.
-
-### `HeaderIndex`
-
-::: openhanji.parsers.hwpx.HeaderIndex
-
-A bundle of lookup tables built once per document from `header.xml`:
-
-- `font_faces` — `id → {hangul, latin, hanja, …}` font face metadata.
-- `char_shapes` — `charPrID → CharShape` character formatting.
-- `para_shapes` — `paraPrID → ParaShape` paragraph formatting (`outline_level`, `list_kind`, `align`).
-- `styles` — `styleID → name` named-style table.
-
-The walker holds a `HeaderIndex` and consults it for every `<hp:p>`
-and `<hp:run>`. Building it once up-front avoids repeated XML scans.
-
-### `CharShape`
-
-::: openhanji.parsers.hwpx.CharShape
-
-The denormalised character formatting record indexed by `charPrID`.
-Mirrors the [`Run`](document.md#run) formatting fields exactly —
-copying `CharShape` attributes onto a `Run` is the parser's hot path.
-Carries both `font_face` (Hangul) and `font_face_latin` (Latin/ASCII),
-resolved from the `refList` font face table in `header.xml`.
-
-### `ParaShape`
-
-::: openhanji.parsers.hwpx.ParaShape
-
-The denormalised paragraph formatting record indexed by `paraPrID`.
-Holds the three fields the walker needs per paragraph: `outline_level`
-(maps to heading depth), `list_kind` (`"ordered"` / `"unordered"` /
-`""`), and `align` (`"left"` / `"center"` / `"right"` / `"justify"` /
-`""`).
-
-`outline_level` is resolved with a preference order: a
-`<hh:heading type="OUTLINE" level="N">` child element on `<hh:paraPr>`
-takes precedence over the `outlineLevel` attribute. The child element
-is the more explicit structural signal; the attribute is the fallback
-for older documents that don't include it.

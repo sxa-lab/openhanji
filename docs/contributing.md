@@ -57,7 +57,7 @@ and on every PR (preview builds).
 
 The API pages under `docs/api/` mix two layers:
 
-1. **Auto-generated** — `:::` directives (e.g. `::: openhanji.document.Run`)
+1. **Auto-generated** — `:::` directives (e.g. `::: openhanji.models.document.Run`)
    render the signature, fields, and types directly from the source.
    These stay in sync with the code automatically.
 2. **Hand-written prose** — everything around the directives.
@@ -66,21 +66,20 @@ The API pages under `docs/api/` mix two layers:
    docstrings short; put the depth here.
 
 When a public symbol is renamed or a field is added, the autodoc
-section updates without any docs edit. The surrounding prose may need
-a follow-up.
+section updates without any docs edit. The surrounding prose needs a follow-up.
 
 ## Adding a new output format
 
 Four touch points, in order:
 
 1. Add a `Document.to_<format>()` method in
-   [`document.py`](api/document.md) (or a standalone
+   [`models/document.py`](api/document.md) (or a standalone
    converter function in `openhanji/converters/`).
 2. Add the format name to the `--format` `click.Choice` in
    [`cli.py`](cli.md) `extract`.
-3. Add the format → extension mapping to `_EXT_MAP` in `cli.py`
+3. Add the format-to-extension mapping to `_EXT_MAP` in `cli.py`
    (used for output filenames in directory mode).
-4. Add a branch to `_render` in `cli.py`.
+4. Add a branch to `_convert` in `cli.py`.
 
 ## Behavioral rule for the parser
 
@@ -92,3 +91,47 @@ Unknown XML must be skipped and logged at `WARNING`. Use the
 
 PRs that crash the default path on previously-handled inputs will be
 rejected.
+
+## Parser internals
+
+These are not public API. Signatures change freely between versions.
+
+### `HeaderIndex`
+
+::: openhanji.parsers.hwpx_support.HeaderIndex
+
+A bundle of lookup tables built once per document from `header.xml`:
+
+- `font_faces` — maps `id` to `{hangul, latin, hanja, …}` font face metadata.
+- `char_shapes` — maps `charPrID` to `CharShape` character formatting.
+- `para_shapes` — maps `paraPrID` to `ParaShape` paragraph formatting (`outline_level`, `list_kind`, `align`).
+- `styles` — maps `styleID` to a named-style string.
+
+The walker holds a `HeaderIndex` and consults it for every `<hp:p>`
+and `<hp:run>`. Building it once up-front avoids repeated XML scans.
+
+### `CharShape`
+
+::: openhanji.parsers.hwpx_support.CharShape
+
+The denormalised character formatting record indexed by `charPrID`.
+Mirrors the [`Run`](api/document.md#run) formatting fields exactly —
+copying `CharShape` attributes onto a `Run` is the parser's hot path.
+Carries both `font_face` (Hangul) and `font_face_latin` (Latin/ASCII),
+resolved from the `refList` font face table in `header.xml`.
+
+### `ParaShape`
+
+::: openhanji.parsers.hwpx_support.ParaShape
+
+The denormalised paragraph formatting record indexed by `paraPrID`.
+Holds the three fields the walker needs per paragraph: `outline_level`
+(maps to heading depth), `list_kind` (`"ordered"` / `"unordered"` /
+`""`), and `align` (`"left"` / `"center"` / `"right"` / `"justify"` /
+`""`).
+
+`outline_level` is resolved with a preference order: a
+`<hh:heading type="OUTLINE" level="N">` child element on `<hh:paraPr>`
+takes precedence over the `outlineLevel` attribute. The child element
+is the more explicit structural signal; the attribute is the fallback
+for older documents that don't include it.
