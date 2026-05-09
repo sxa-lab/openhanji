@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 from datetime import datetime
 
-from openhanji.exceptions import CorruptedFileError
+from openhanji.exceptions import CorruptedFileError, UnknownRecordError
 from openhanji.models.document import (
     Cell,
     Document,
@@ -59,7 +59,7 @@ class HwpxParser(BaseParser):
                 return doc
         except zipfile.BadZipFile as exc:
             raise CorruptedFileError(f"Not a valid HWPX file: {path}") from exc
-        except CorruptedFileError:
+        except (CorruptedFileError, UnknownRecordError):
             raise
         except Exception as exc:
             raise CorruptedFileError(f"Failed to parse {path}: {exc}") from exc
@@ -91,6 +91,12 @@ class HwpxParser(BaseParser):
         visit_blocks(doc.blocks)
 
     def _parse_metadata(self, zf: zipfile.ZipFile, names: list[str]) -> Metadata:
+        """Build Metadata from header.xml and content.hpf.
+
+        header.xml is read first for title, author, and subject; content.hpf
+        fills in only what header.xml left empty. Dates, keywords, and page
+        count come from content.hpf exclusively.
+        """
         meta = Metadata()
 
         header = next((n for n in names if n.endswith("header.xml")), None)
@@ -482,6 +488,10 @@ class HwpxParser(BaseParser):
                     body.append(image)
                     index += 1
             else:
+                if self.strict:
+                    raise UnknownRecordError(
+                        f"Unrecognised block element <{tag}> inside <{_strip_ns(elem.tag)}>"
+                    )
                 index = self._walk(
                     child, body, index, bindata, header_index, headers, footers
                 )

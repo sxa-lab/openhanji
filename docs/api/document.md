@@ -1,13 +1,13 @@
 # Document model
 
 Plain dataclasses, no ORM, no magic. Everything in
-`openhanji.document` is a simple value object you can pickle, copy,
+`openhanji.models.document` is a simple value object you can pickle, copy,
 or serialise. All composite nodes have a `to_dict()` method used by
-[`Document.to_json()`](#to_json).
+[`openhanji.converters.json.to_json()`](converters.md#to_json).
 
 ## `Document`
 
-::: openhanji.document.Document
+::: openhanji.models.document.Document
 
 `Document` is constructed in one of two ways:
 
@@ -64,28 +64,34 @@ for block in doc.footers:
 In flat JSON output (`mode="flat"`, the default), `"headers"` and
 `"footers"` keys are present only when non-empty. In structured JSON
 (`mode="structured"`), headers/footers appear per section inside each
-section dict. In Markdown output, paragraph text from headers/footers
-renders as HTML comments (`<!-- header: text -->`). In plain text,
-they render as `[header: text]` / `[footer: text]` lines.
+section dict, also omitted when empty. In Markdown output, paragraph
+texts are joined with ` | ` and emitted as an HTML comment
+(`<!-- header: text -->`); non-Paragraph blocks in the header/footer
+region are silently dropped by the converter. In plain text, the same
+join applies and they render as `[header: text]` / `[footer: text]`
+lines.
 
-### `to_json()`
+### JSON conversion
 
-Serialises the document to a JSON string. Default formatting fields
-on runs are **omitted** from the output — this keeps payloads compact
+JSON conversion is provided by
+[`openhanji.converters.json.to_json()`](converters.md#to_json).
+Default formatting fields on runs are **omitted** from the output — this keeps payloads compact
 and signals "default formatting" by absence rather than by explicit
 `false` / `null`.
 
 ```python
 import openhanji
+from openhanji.converters.json import to_json
+
 doc = openhanji.open("document.hwpx")
-print(doc.to_json(indent=2))
+print(to_json(doc, indent=2))
 ```
 
 Two output shapes, controlled by the `mode` kwarg:
 
 The `mode` parameter is typed as `JsonMode = Literal["flat", "structured"]`
-(importable from `openhanji.document`). Any other value raises `ValueError`
-before serialisation begins.
+(importable from `openhanji.converters.json`). Any other value raises
+`ValueError` before serialisation begins.
 
 **`mode="flat"` (default)** — single flat `"body"` list, best for RAG/NLP:
 
@@ -111,8 +117,8 @@ boundaries and per-section headers/footers:
       "index": 0,
       "source_path": "Contents/section0.xml",
       "blocks": [...],
-      "headers": [...],
-      "footers": [...]
+      "headers": [...],   //omitted when empty
+      "footers": [...]    //omitted when empty
     }
   ]
 }
@@ -122,17 +128,18 @@ By default `"data"` on image nodes is `null` — binaries are not read
 from the zip. Pass `with_images=True` to `openhanji.open()` to get
 base64-inlined binaries instead.
 
-### `to_markdown()` / `to_text()`
+### `to_markdown()` / `to_text()` / `to_json()`
 
-Thin shims over [`openhanji.converters.markdown.to_markdown`](converters.md#to_markdown)
-and [`openhanji.converters.text.to_text`](converters.md#to_text).
+Converts the document using [`openhanji.converters.markdown`](converters.md#to_markdown),
+[`openhanji.converters.text`](converters.md#to_text), and
+[`openhanji.converters.json`](converters.md#to_json) respectively.
 See the [converters page](converters.md) for the full rendering rules.
 
 ---
 
 ## `Section`
 
-::: openhanji.document.Section
+::: openhanji.models.document.Section
 
 A `Section` maps 1:1 to one `section*.xml` file in the HWPX zip.
 It holds all blocks from that file, plus the page-level headers and
@@ -155,18 +162,39 @@ the header/footer regions of **this** section's pages.
 when the `Section` was constructed directly (e.g. in tests via
 `Document(body=[...])`).
 
+### `Section.to_dict()` output
+
+`section.to_dict()` is the building block for `mode="structured"` JSON.
+Its output shape:
+
+```json
+{
+  "index": 0,
+  "source_path": "Contents/section0.xml",
+  "blocks": [...],
+  "headers": [...],   // omitted when empty
+  "footers": [...]    // omitted when empty
+}
+```
+
+`"headers"` and `"footers"` are omitted when empty. `"blocks"` is a
+list of paragraph / table / image dicts (same shape as `mode="flat"`
+body items). `"source_path"` is `null` for `Section` objects created
+without one (e.g. via `Document(body=[...])`).
+
 ---
 
 ## `Paragraph`
 
-::: openhanji.document.Paragraph
+::: openhanji.models.document.Paragraph
 
 ### Field semantics
 
 - **`text`** — the exact concatenation of all run texts, including any
   leading or trailing whitespace the source encodes as indentation.
-  `para.text == "".join(r.text for r in para.runs)` always holds.
-  For RAG chunking use `para.text.strip()`; for character-level
+  `paragraph.text == "".join(r.text for r in paragraph.runs)` holds
+  whenever `runs` is non-empty — enforced by `__post_init__`.
+  For RAG chunking use `paragraph.text.strip()`; for character-level
   formatting use `runs`.
 - **`style`** — a [`ParagraphStyle`](#paragraphstyle) enum value.
   Defaults to `BODY`. Heading levels 1–6 set both `style` and `level`.
@@ -176,8 +204,9 @@ when the `Section` was constructed directly (e.g. in tests via
 - **`runs`** — list of [`Run`](#run) objects in source order. May be
   empty for purely structural paragraphs (e.g. an empty paragraph
   used as vertical spacing).
-- **`index`** — zero-based position in `Document.blocks` filtered to
-  paragraphs. Stable across runs of the parser.
+- **`index`** — zero-based position in `Document.blocks` (shared
+  counter across paragraphs, tables, and images). Stable across runs
+  of the parser.
 - **`align`** — alignment string from `paraPr` when resolvable
   (`"left"`, `"center"`, `"right"`, `"justify"`). `None` when the
   paragraph inherits or no `paraPr` reference resolves.
@@ -194,7 +223,7 @@ identifies the node when reading back from JSON.
 
 ## `Run`
 
-::: openhanji.document.Run
+::: openhanji.models.document.Run
 
 ### Field semantics
 
@@ -225,8 +254,8 @@ text nodes pointing to the same `charPrIDRef` into one `Run`.
 ### JSON serialisation is sparse
 
 Default-valued fields are dropped from `to_dict()` output. A run with
-no formatting serialises as just `{"text": "..."}`. This is
-intentional — most runs in a typical document have no formatting, so
+no formatting serialises as `{"text": "..."}`. This is
+intentional — most runs have no formatting, so
 omitting defaults keeps the JSON 3–5× smaller without losing
 information.
 
@@ -253,10 +282,10 @@ Underline is **never** rendered in Markdown output (no GFM syntax for
 it). The HTML fallback path used for complex tables does emit `<u>`.
 
 A paragraph's runs are only rendered with this formatting if at
-**least one** run has `bold`, `italic`, or `underline`. Otherwise the
-converter falls back to the flat `paragraph.text`. This avoids
-emitting the same characters twice when run boundaries don't carry
-useful information.
+**least one** run has `bold`, `italic`, `underline`, or `href`.
+Otherwise the converter falls back to the flat `paragraph.text`.
+This avoids emitting the same characters twice when run boundaries
+don't carry useful information.
 
 ### Special run content
 
@@ -281,11 +310,11 @@ formula.
 
 ## `Table`, `Row`, `Cell`
 
-::: openhanji.document.Table
+::: openhanji.models.document.Table
 
-::: openhanji.document.Row
+::: openhanji.models.document.Row
 
-::: openhanji.document.Cell
+::: openhanji.models.document.Cell
 
 ### `Cell.blocks` is the canonical storage
 
@@ -304,6 +333,22 @@ images. The convenience properties — `cell.paragraphs`, `cell.tables`,
 Use `cell.text` for RAG ingestion when you want the cell as a single
 string; use `cell.blocks` (or its filtered views) for structure-aware
 rendering that needs to see the nested tables.
+
+### `Cell.to_dict()` output
+
+```json
+{
+  "text": "flattened plain text of the cell",
+  "col_span": 1,
+  "row_span": 1,
+  "blocks": [...]
+}
+```
+
+`"text"` is the recursive plain-text flattening of `cell.blocks` (same
+result as `cell.text`). `"blocks"` holds each child block serialised with
+its own `to_dict()` — paragraphs, nested tables, and image refs all appear
+here in document order.
 
 ### Spans
 
@@ -334,7 +379,7 @@ HTML fallback for complex tables.
 
 ## `ImageRef`
 
-::: openhanji.document.ImageRef
+::: openhanji.models.document.ImageRef
 
 ### Binary extraction
 
@@ -391,20 +436,29 @@ anchors.
 
 ## `Metadata`
 
-::: openhanji.document.Metadata
+::: openhanji.models.document.Metadata
 
 ### Field provenance
 
 Metadata is sourced from two places inside the HWPX zip, with
 different reliability:
 
-- **`title`** — `<opf:title>` in `content.hpf`; falls back to
-  `<dc:title>` in `header.xml`.
-- **`author`** — `<opf:meta name="creator">` in `content.hpf`; falls
-  back to `<dc:creator>` in `header.xml`. Often the OS username rather
-  than a display name when the user never configured one.
-- **`subject`** — `<opf:meta name="subject">` in `content.hpf`; falls
-  back to `<dc:subject>` in `header.xml`.
+The OWPML model (`hancom-io/hwpx-owpml-model`) designates `content.hpf`
+as the OPF package file — the standard place for metadata in OOXML-style
+formats. `header.xml` holds the document's internal Dublin Core fields.
+In practice, `header.xml` tends to be more reliably populated in
+Hancom-saved files, so the parser reads it first and uses `content.hpf`
+only to fill in fields that `header.xml` left empty.
+
+- **`title`** — read from `header.xml` (Dublin Core `title` field)
+  first; `content.hpf` (`<opf:title>`) fills in only if `header.xml`
+  left it empty.
+- **`author`** — read from `header.xml` (`creator` / `author` field)
+  first; `content.hpf` (`<opf:meta name="creator">`) fills in only if
+  empty. Often the OS username rather than a display name when the user
+  never configured one.
+- **`subject`** — read from `header.xml` first; `content.hpf`
+  (`<opf:meta name="subject">`) fills in only if empty.
 - **`created_at`, `modified_at`** — `<opf:meta name="CreatedDate/ModifiedDate">`
   in `content.hpf`. Reliably present in HWPX files.
 - **`keywords`** — `<opf:meta name="keyword">` in `content.hpf`, split
@@ -415,7 +469,7 @@ different reliability:
 
 ## `ParagraphStyle`
 
-::: openhanji.document.ParagraphStyle
+::: openhanji.models.document.ParagraphStyle
 
 A string enum. The `.value` is the canonical wire format used in JSON
 output:
@@ -441,7 +495,7 @@ every line keeps source diffs stable when items are reordered.
    styles. Suppressed when `heading_detection="none"`.
 
 2. **List detection** — `list_kind` from the `para_shapes` index
-   (`ordered` → `LIST_ORDERED`, `unordered` → `LIST_UNORDERED`), or a
+   (`ordered` maps to `LIST_ORDERED`, `unordered` maps to `LIST_UNORDERED`), or a
    style name containing `"list"` / `"bullet"`. Runs regardless of
    `heading_detection` mode.
 
