@@ -3,13 +3,9 @@
 from __future__ import annotations
 
 import base64
-import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Literal
-
-JsonMode = Literal["flat", "structured"]
 
 
 class ParagraphStyle(str, Enum):
@@ -30,10 +26,10 @@ class Run:
     bold: bool = False
     italic: bool = False
     underline: bool = False
-    font_size: float | None = None   #points
-    color: str | None = None         #hex e.g. "#FF0000"
-    font_face: str | None = None     #resolved Hangul font face
-    href: str | None = None          #set when run is inside a HYPERLINK field
+    font_size: float | None = None  # points
+    color: str | None = None  # hex e.g. "#FF0000"
+    font_face: str | None = None  # resolved Hangul font face
+    href: str | None = None  # set when run is inside a HYPERLINK field
 
     def to_dict(self) -> dict[str, object]:
         d: dict[str, object] = {"text": self.text}
@@ -68,9 +64,7 @@ class Paragraph:
         if self.runs:
             joined = "".join(r.text for r in self.runs)
             if self.text != joined:
-                raise ValueError(
-                    f"Paragraph.text {self.text!r} != run join {joined!r}"
-                )
+                raise ValueError(f"Paragraph.text {self.text!r} != run join {joined!r}")
 
     def to_dict(self) -> dict[str, object]:
         d: dict[str, object] = {
@@ -135,22 +129,19 @@ class Table:
             "type": "table",
             "index": self.index,
             "caption": self.caption,
-            "rows": [
-                {"cells": [c.to_dict() for c in row.cells]}
-                for row in self.rows
-            ],
+            "rows": [{"cells": [c.to_dict() for c in row.cells]} for row in self.rows],
         }
 
 
 @dataclass
 class ImageRef:
     index: int = 0
-    image_seq: int = 0  #document-global counter for placeholder names
+    image_seq: int = 0  # document-global counter for placeholder names
     caption: str | None = None
     width: int | None = None
     height: int | None = None
     data: bytes | None = None
-    format: str | None = None  #e.g. "png", "jpg", "bmp"
+    format: str | None = None  # e.g. "png", "jpg", "bmp"
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -170,7 +161,7 @@ class Section:
     headers: list[Paragraph | Table | ImageRef] = field(default_factory=list)
     footers: list[Paragraph | Table | ImageRef] = field(default_factory=list)
     index: int = 0
-    source_path: str | None = None  #e.g. "Contents/section0.xml"
+    source_path: str | None = None  # e.g. "Contents/section0.xml"
 
     @property
     def paragraphs(self) -> list[Paragraph]:
@@ -205,8 +196,7 @@ def _blocks_to_plain_text(blocks: list[Paragraph | Table | ImageRef]) -> str:
                 parts.append(block.text)
         elif isinstance(block, Table):
             row_lines = [
-                "\t".join(cell.text for cell in row.cells)
-                for row in block.rows
+                "\t".join(cell.text for cell in row.cells) for row in block.rows
             ]
             table_text = "\n".join(line for line in row_lines if line)
             if table_text:
@@ -239,7 +229,6 @@ class Metadata:
 
 
 class Document:
-
     def __init__(
         self,
         metadata: Metadata | None = None,
@@ -250,7 +239,7 @@ class Document:
         if sections is not None:
             self.sections: list[Section] = sections
         elif body is not None:
-            #Wrap a flat block list into a single anonymous section.
+            # Wrap a flat block list into a single anonymous section.
             self.sections = [Section(blocks=body)]
         else:
             self.sections = []
@@ -280,36 +269,20 @@ class Document:
         """Flattened ordered list of all top-level blocks across all sections."""
         return [b for s in self.sections for b in s.blocks]
 
-    _JSON_MODES = frozenset({"flat", "structured"})
-
-    def to_json(self, indent: int = 2, *, mode: JsonMode = "flat") -> str:
-        if mode not in self._JSON_MODES:
-            raise ValueError(
-                f"mode must be 'flat' or 'structured'; got {mode!r}"
-            )
-        if mode == "structured":
-            data: dict[str, object] = {
-                "metadata": self.metadata.to_dict(),
-                "sections": [s.to_dict() for s in self.sections],
-            }
-        else:
-            data = {
-                "metadata": self.metadata.to_dict(),
-                "body": [b.to_dict() for b in self.blocks],
-            }
-            if self.headers:
-                data["headers"] = [b.to_dict() for b in self.headers]
-            if self.footers:
-                data["footers"] = [b.to_dict() for b in self.footers]
-        return json.dumps(data, ensure_ascii=False, indent=indent)
-
     def to_markdown(self) -> str:
         from openhanji.converters.markdown import to_markdown
+
         return to_markdown(self)
 
     def to_text(self) -> str:
         from openhanji.converters.text import to_text
+
         return to_text(self)
+
+    def to_json(self, indent: int = 2, *, mode: str = "flat") -> str:
+        from openhanji.converters.json import to_json
+
+        return to_json(self, indent=indent, mode=mode)  # type: ignore[arg-type]
 
     def __repr__(self) -> str:
         return (

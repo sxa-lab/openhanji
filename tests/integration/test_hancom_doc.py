@@ -1,12 +1,17 @@
 """Regression tests against fax-hancom.hwpx (Hancom Office-produced document)."""
 
-import json
 import pathlib
 
 import pytest
 
 import openhanji
-from openhanji.document import Paragraph, Table
+from openhanji.models.document import Paragraph
+from tests.integration.builders import (
+    assert_block_indices_sequential,
+    assert_run_text_invariant_cells,
+    assert_strict_block_count_unchanged,
+    assert_to_json_body_matches_blocks,
+)
 
 FIXTURE = (
     pathlib.Path(__file__).parent.parent / "test_files" / "hwpx" / "lab_fax-hancom.hwpx"
@@ -19,9 +24,9 @@ def doc():
 
 
 class DescribeStructure:
-
     def it_parses_without_error(self, doc):
-        from openhanji.document import Document
+        from openhanji.models.document import Document
+
         assert isinstance(doc, Document)
 
     def it_has_four_tables(self, doc):
@@ -37,12 +42,10 @@ class DescribeStructure:
         assert len(doc.images) == 0
 
     def it_block_indices_are_sequential(self, doc):
-        indices = [b.index for b in doc.blocks]
-        assert indices == list(range(len(indices)))
+        assert_block_indices_sequential(doc)
 
 
 class DescribeHeaderFooter:
-
     def it_extracts_one_header(self, doc):
         assert len(doc.headers) == 1
 
@@ -63,7 +66,6 @@ class DescribeHeaderFooter:
 
 
 class DescribeCellContent:
-
     def it_cell_text_accessible_for_all_cells(self, doc):
         for tbl in doc.tables:
             for row in tbl.rows:
@@ -77,35 +79,28 @@ class DescribeCellContent:
         assert len(doc.tables[1].rows) == 4
 
     def it_run_text_invariant_holds(self, doc):
-        for tbl in doc.tables:
-            for row in tbl.rows:
-                for cell in row.cells:
-                    for block in cell.blocks:
-                        if isinstance(block, Paragraph):
-                            assert block.text == "".join(r.text for r in block.runs)
+        assert_run_text_invariant_cells(doc)
 
 
 class DescribeStrictMode:
-
     def it_parses_under_strict_true(self):
         doc = openhanji.open(FIXTURE, strict=True)
         assert len(doc.blocks) == 4
 
     def it_strict_mode_does_not_change_block_count(self):
-        assert len(openhanji.open(FIXTURE).blocks) == len(
-            openhanji.open(FIXTURE, strict=True).blocks
-        )
+        assert_strict_block_count_unchanged(FIXTURE)
 
 
 class DescribeOutputFormats:
-
     def it_to_json_is_valid(self, doc):
-        data = json.loads(doc.to_json())
-        assert "body" in data
-        assert len(data["body"]) == len(doc.blocks)
+        assert_to_json_body_matches_blocks(doc)
 
     def it_to_json_structured_has_sections(self, doc):
-        data = json.loads(doc.to_json(mode="structured"))
+        import json
+
+        from openhanji.converters.json import to_json
+
+        data = json.loads(to_json(doc, mode="structured"))
         assert "sections" in data
 
     def it_to_markdown_produces_string(self, doc):
