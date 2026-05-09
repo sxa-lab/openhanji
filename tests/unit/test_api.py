@@ -8,7 +8,9 @@ import json
 import pytest
 
 import openhanji
-from openhanji.document import (
+from openhanji.converters.json import to_json
+from openhanji.exceptions import NotSupportedError
+from openhanji.models.document import (
     Cell,
     Document,
     ImageRef,
@@ -20,14 +22,17 @@ from openhanji.document import (
     Section,
     Table,
 )
-from openhanji.exceptions import NotSupportedError
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _para(text: str, style: ParagraphStyle = ParagraphStyle.BODY, level: int = 0) -> Paragraph:
+
+def _para(
+    text: str,
+    style: ParagraphStyle = ParagraphStyle.BODY,
+    level: int = 0,
+) -> Paragraph:
     return Paragraph(text=text, style=style, level=level, runs=[Run(text=text)])
 
 
@@ -36,7 +41,7 @@ def _heading(level: int, text: str) -> Paragraph:
     return Paragraph(text=text, style=style, runs=[Run(text=text)])
 
 
-#errors
+# errors
 def test_open_hwp_raises_not_supported(tmp_path):
     fake = tmp_path / "test.hwp"
     fake.write_bytes(b"\xd0\xcf\x11\xe0")
@@ -56,9 +61,10 @@ def test_open_unsupported_extension(tmp_path):
         openhanji.open(f)
 
 
-#document model
+# document model
 def _make_doc() -> Document:
     meta = Metadata(title="Test Doc", author="SxA Lab", keywords=["test", "hwpx"])
+
     def cell(text: str) -> Cell:
         return Cell(blocks=[Paragraph(text=text)])
 
@@ -100,10 +106,10 @@ def test_document_images():
     assert doc.images[0].caption == "Figure 1"
 
 
-#json
+# json
 def test_to_json_is_valid():
     doc = _make_doc()
-    data = json.loads(doc.to_json())
+    data = json.loads(to_json(doc))
     assert data["metadata"]["title"] == "Test Doc"
     assert data["metadata"]["keywords"] == ["test", "hwpx"]
     assert len(data["body"]) == 4
@@ -112,7 +118,7 @@ def test_to_json_is_valid():
     assert data["body"][3]["type"] == "image"
 
 
-#markdown
+# markdown
 def test_to_markdown_headings():
     doc = _make_doc()
     md = doc.to_markdown()
@@ -132,7 +138,7 @@ def test_to_markdown_runs():
     assert "Hello" in md and "world" in md
 
 
-#text
+# text
 def test_to_text():
     doc = _make_doc()
     text = doc.to_text()
@@ -141,7 +147,7 @@ def test_to_text():
     assert "Name" in text
 
 
-#repr
+# repr
 def test_repr():
     doc = _make_doc()
     r = repr(doc)
@@ -149,13 +155,30 @@ def test_repr():
     assert "paragraphs=2" in r
 
 
-#LIST_ORDERED
+# LIST_ORDERED
 def test_to_markdown_ordered_list():
-    doc = Document(body=[
-        Paragraph(text="First item", style=ParagraphStyle.LIST_ORDERED, level=0, index=0),
-        Paragraph(text="Second item", style=ParagraphStyle.LIST_ORDERED, level=0, index=1),
-        Paragraph(text="Nested item", style=ParagraphStyle.LIST_ORDERED, level=1, index=2),
-    ])
+    doc = Document(
+        body=[
+            Paragraph(
+                text="First item",
+                style=ParagraphStyle.LIST_ORDERED,
+                level=0,
+                index=0,
+            ),
+            Paragraph(
+                text="Second item",
+                style=ParagraphStyle.LIST_ORDERED,
+                level=0,
+                index=1,
+            ),
+            Paragraph(
+                text="Nested item",
+                style=ParagraphStyle.LIST_ORDERED,
+                level=1,
+                index=2,
+            ),
+        ]
+    )
     md = doc.to_markdown()
     assert "1. First item" in md
     assert "1. Second item" in md
@@ -163,26 +186,28 @@ def test_to_markdown_ordered_list():
 
 
 def test_to_markdown_ordered_list_not_unordered():
-    doc = Document(body=[
-        Paragraph(text="Item", style=ParagraphStyle.LIST_ORDERED, level=0, index=0),
-    ])
+    doc = Document(
+        body=[
+            Paragraph(text="Item", style=ParagraphStyle.LIST_ORDERED, level=0, index=0),
+        ]
+    )
     md = doc.to_markdown()
     assert "- Item" not in md
     assert "1. Item" in md
 
 
-#page_count in JSON
+# page_count in JSON
 def test_to_json_page_count():
     meta = Metadata(title="T", page_count=5)
     doc = Document(metadata=meta, body=[])
-    data = json.loads(doc.to_json())
+    data = json.loads(to_json(doc))
     assert data["metadata"]["page_count"] == 5
 
 
 def test_to_json_page_count_none():
     meta = Metadata(title="T")
     doc = Document(metadata=meta, body=[])
-    data = json.loads(doc.to_json())
+    data = json.loads(to_json(doc))
     assert data["metadata"]["page_count"] is None
 
 
@@ -190,20 +215,22 @@ def test_to_json_page_count_none():
 # Parametrized markdown output — specific line-level assertions
 # ---------------------------------------------------------------------------
 
-class DescribeMarkdownHeadings:
 
+class DescribeMarkdownHeadings:
     @pytest.mark.parametrize(
         ("level", "text", "expected_line"),
         [
-            (1, "제목 1",  "# 제목 1"),
-            (2, "제목 2",  "## 제목 2"),
-            (3, "제목 3",  "### 제목 3"),
-            (4, "제목 4",  "#### 제목 4"),
-            (5, "제목 5",  "##### 제목 5"),
-            (6, "제목 6",  "###### 제목 6"),
+            (1, "제목 1", "# 제목 1"),
+            (2, "제목 2", "## 제목 2"),
+            (3, "제목 3", "### 제목 3"),
+            (4, "제목 4", "#### 제목 4"),
+            (5, "제목 5", "##### 제목 5"),
+            (6, "제목 6", "###### 제목 6"),
         ],
     )
-    def it_renders_each_heading_level(self, level: int, text: str, expected_line: str) -> None:
+    def it_renders_each_heading_level(
+        self, level: int, text: str, expected_line: str
+    ) -> None:
         doc = Document(body=[_heading(level, text)])
         assert expected_line in doc.to_markdown().splitlines()
 
@@ -215,42 +242,52 @@ class DescribeMarkdownHeadings:
 
 
 class DescribeMarkdownRunFormatting:
-
     @pytest.mark.parametrize(
         ("bold", "italic", "expected_substr"),
         [
-            (True,  False, "**굵게**"),
-            (False, True,  "_기울임_"),
-            (True,  True,  "***굵고 기울임***"),
+            (True, False, "**굵게**"),
+            (False, True, "_기울임_"),
+            (True, True, "***굵고 기울임***"),
         ],
     )
-    def it_wraps_runs_with_correct_markers(self, bold: bool, italic: bool, expected_substr: str) -> None:
-        text = "굵게" if bold and not italic else "기울임" if italic and not bold else "굵고 기울임"
-        doc = Document(body=[
-            Paragraph(
-                text=text,
-                runs=[Run(text=text, bold=bold, italic=italic)],
-            )
-        ])
+    def it_wraps_runs_with_correct_markers(
+        self, bold: bool, italic: bool, expected_substr: str
+    ) -> None:
+        text = (
+            "굵게"
+            if bold and not italic
+            else "기울임"
+            if italic and not bold
+            else "굵고 기울임"
+        )
+        doc = Document(
+            body=[
+                Paragraph(
+                    text=text,
+                    runs=[Run(text=text, bold=bold, italic=italic)],
+                )
+            ]
+        )
         assert expected_substr in doc.to_markdown()
 
     def it_does_not_emit_underline_in_markdown(self) -> None:
-        doc = Document(body=[
-            Paragraph(text="밑줄", runs=[Run(text="밑줄", underline=True)])
-        ])
+        doc = Document(
+            body=[Paragraph(text="밑줄", runs=[Run(text="밑줄", underline=True)])]
+        )
         md = doc.to_markdown()
         assert "<u>" not in md
         assert "밑줄" in md
 
 
 class DescribeMarkdownImagePlaceholders:
-
     def it_emits_unique_placeholder_names_for_multiple_images(self) -> None:
-        doc = Document(body=[
-            ImageRef(index=0, image_seq=0, caption="첫 번째"),
-            ImageRef(index=1, image_seq=1, caption="두 번째"),
-            ImageRef(index=2, image_seq=2),
-        ])
+        doc = Document(
+            body=[
+                ImageRef(index=0, image_seq=0, caption="첫 번째"),
+                ImageRef(index=1, image_seq=1, caption="두 번째"),
+                ImageRef(index=2, image_seq=2),
+            ]
+        )
         md = doc.to_markdown()
         assert "![첫 번째](image_0)" in md
         assert "![두 번째](image_1)" in md
@@ -266,16 +303,15 @@ class DescribeMarkdownImagePlaceholders:
 
 
 class DescribeMarkdownLists:
-
     @pytest.mark.parametrize(
         ("style", "level", "expected_prefix"),
         [
             (ParagraphStyle.LIST_UNORDERED, 0, "- "),
             (ParagraphStyle.LIST_UNORDERED, 1, "  - "),
             (ParagraphStyle.LIST_UNORDERED, 2, "    - "),
-            (ParagraphStyle.LIST_ORDERED,   0, "1. "),
-            (ParagraphStyle.LIST_ORDERED,   1, "  1. "),
-            (ParagraphStyle.LIST_ORDERED,   2, "    1. "),
+            (ParagraphStyle.LIST_ORDERED, 0, "1. "),
+            (ParagraphStyle.LIST_ORDERED, 1, "  1. "),
+            (ParagraphStyle.LIST_ORDERED, 2, "    1. "),
         ],
     )
     def it_renders_list_items_with_correct_indent(
@@ -287,16 +323,26 @@ class DescribeMarkdownLists:
 
 
 class DescribeTextOutput:
-
     def it_flattens_table_cells_with_tabs(self) -> None:
-        doc = Document(body=[
-            Table(rows=[
-                Row(cells=[
-                    Cell(blocks=[Paragraph(text="가", runs=[Run(text="가")])]),
-                    Cell(blocks=[Paragraph(text="나", runs=[Run(text="나")])]),
-                ]),
-            ], index=0),
-        ])
+        doc = Document(
+            body=[
+                Table(
+                    rows=[
+                        Row(
+                            cells=[
+                                Cell(
+                                    blocks=[Paragraph(text="가", runs=[Run(text="가")])]
+                                ),
+                                Cell(
+                                    blocks=[Paragraph(text="나", runs=[Run(text="나")])]
+                                ),
+                            ]
+                        ),
+                    ],
+                    index=0,
+                ),
+            ]
+        )
         text = doc.to_text()
         assert "가\t나" in text
 
@@ -310,43 +356,43 @@ class DescribeTextOutput:
 
 
 class DescribeJsonSerialization:
-
     @pytest.mark.parametrize(
         ("field", "value", "expected"),
         [
-            ("bold",      True,  True),
-            ("italic",    True,  True),
-            ("underline", True,  True),
-            ("font_size", 14.0,  14.0),
-            ("color",     "#FF0000", "#FF0000"),
+            ("bold", True, True),
+            ("italic", True, True),
+            ("underline", True, True),
+            ("font_size", 14.0, 14.0),
+            ("color", "#FF0000", "#FF0000"),
         ],
     )
-    def it_includes_non_default_run_fields(self, field: str, value: object, expected: object) -> None:
+    def it_includes_non_default_run_fields(
+        self, field: str, value: object, expected: object
+    ) -> None:
         run = Run(text="텍스트", **{field: value})  # type: ignore[arg-type]
         para = Paragraph(text="텍스트", runs=[run])
         doc = Document(body=[para])
-        data = json.loads(doc.to_json())
+        data = json.loads(to_json(doc))
         run_data = data["body"][0]["runs"][0]
         assert run_data[field] == expected
 
     def it_omits_default_run_fields(self) -> None:
         doc = Document(body=[Paragraph(text="기본", runs=[Run(text="기본")])])
-        data = json.loads(doc.to_json())
+        data = json.loads(to_json(doc))
         run_data = data["body"][0]["runs"][0]
         assert set(run_data.keys()) == {"text"}
 
     def it_serialises_image_data_as_null_when_absent(self) -> None:
         doc = Document(body=[ImageRef(index=0, image_seq=0)])
-        data = json.loads(doc.to_json())
+        data = json.loads(to_json(doc))
         assert data["body"][0]["data"] is None
 
 
 class DescribeBoundaryDefaults:
-
     def it_run_with_no_args_serialises_to_text_only(self) -> None:
         run = Run(text="")
         doc = Document(body=[Paragraph(text="", runs=[run])])
-        data = json.loads(doc.to_json())
+        data = json.loads(to_json(doc))
         assert set(data["body"][0]["runs"][0].keys()) == {"text"}
 
     def it_empty_paragraph_to_text_returns_empty_string(self) -> None:
@@ -370,14 +416,17 @@ class DescribeBoundaryDefaults:
         assert Document().to_markdown() == ""
 
     def it_document_with_no_body_to_json_has_empty_body(self) -> None:
-        data = json.loads(Document().to_json())
+        data = json.loads(to_json(Document()))
         assert data["body"] == []
 
 
 class DescribeSections:
-
     def it_constructs_from_sections_kwarg(self) -> None:
-        sec = Section(blocks=[Paragraph(text="hello")], index=0, source_path="Contents/section0.xml")
+        sec = Section(
+            blocks=[Paragraph(text="hello")],
+            index=0,
+            source_path="Contents/section0.xml",
+        )
         doc = Document(sections=[sec])
         assert len(doc.sections) == 1
         assert doc.sections[0].source_path == "Contents/section0.xml"
@@ -409,8 +458,14 @@ class DescribeSections:
         assert doc.images[1].caption == "B"
 
     def it_headers_and_footers_flatten_across_sections(self) -> None:
-        s1 = Section(headers=[Paragraph(text="header1")], footers=[Paragraph(text="footer1")])
-        s2 = Section(headers=[Paragraph(text="header2")], footers=[Paragraph(text="footer2")])
+        s1 = Section(
+            headers=[Paragraph(text="header1")],
+            footers=[Paragraph(text="footer1")],
+        )
+        s2 = Section(
+            headers=[Paragraph(text="header2")],
+            footers=[Paragraph(text="footer2")],
+        )
         doc = Document(sections=[s1, s2])
         assert len(doc.headers) == 2
         assert len(doc.footers) == 2
@@ -418,11 +473,13 @@ class DescribeSections:
         assert doc.footers[1].text == "footer2"
 
     def it_section_filtered_views_do_not_cross_section_boundaries(self) -> None:
-        sec = Section(blocks=[
-            Paragraph(text="p1"),
-            Table(index=0),
-            ImageRef(index=0, image_seq=0),
-        ])
+        sec = Section(
+            blocks=[
+                Paragraph(text="p1"),
+                Table(index=0),
+                ImageRef(index=0, image_seq=0),
+            ]
+        )
         assert len(sec.paragraphs) == 1
         assert len(sec.tables) == 1
         assert len(sec.images) == 1
@@ -431,7 +488,7 @@ class DescribeSections:
         s1 = Section(blocks=[Paragraph(text="a")])
         s2 = Section(blocks=[Paragraph(text="b")])
         doc = Document(sections=[s1, s2])
-        data = json.loads(doc.to_json())
+        data = json.loads(to_json(doc))
         assert "body" in data
         assert len(data["body"]) == 2
         assert "sections" not in data
@@ -459,12 +516,19 @@ class DescribeSections:
 
 
 class DescribeStructuredJson:
-
     def it_structured_mode_has_sections_key(self) -> None:
-        s1 = Section(blocks=[Paragraph(text="a")], index=0, source_path="Contents/section0.xml")
-        s2 = Section(blocks=[Paragraph(text="b")], index=1, source_path="Contents/section1.xml")
+        s1 = Section(
+            blocks=[Paragraph(text="a")],
+            index=0,
+            source_path="Contents/section0.xml",
+        )
+        s2 = Section(
+            blocks=[Paragraph(text="b")],
+            index=1,
+            source_path="Contents/section1.xml",
+        )
         doc = Document(sections=[s1, s2])
-        data = json.loads(doc.to_json(mode="structured"))
+        data = json.loads(to_json(doc, mode="structured"))
         assert "sections" in data
         assert "body" not in data
         assert len(data["sections"]) == 2
@@ -474,12 +538,12 @@ class DescribeStructuredJson:
     def it_structured_mode_includes_blocks_per_section(self) -> None:
         sec = Section(blocks=[Paragraph(text="hello"), Table()])
         doc = Document(sections=[sec])
-        data = json.loads(doc.to_json(mode="structured"))
+        data = json.loads(to_json(doc, mode="structured"))
         assert len(data["sections"][0]["blocks"]) == 2
 
     def it_flat_mode_is_default(self) -> None:
         doc = Document(body=[Paragraph(text="hi")])
-        data = json.loads(doc.to_json())
+        data = json.loads(to_json(doc))
         assert "body" in data
         assert "sections" not in data
 
@@ -490,14 +554,14 @@ class DescribeStructuredJson:
             footers=[Paragraph(text="foot")],
         )
         doc = Document(sections=[sec])
-        data = json.loads(doc.to_json(mode="structured"))
+        data = json.loads(to_json(doc, mode="structured"))
         assert data["sections"][0]["headers"][0]["text"] == "head"
         assert data["sections"][0]["footers"][0]["text"] == "foot"
 
     def it_source_path_is_null_when_not_set(self) -> None:
         sec = Section(blocks=[Paragraph(text="hi")])
         doc = Document(sections=[sec])
-        data = json.loads(doc.to_json(mode="structured"))
+        data = json.loads(to_json(doc, mode="structured"))
         assert data["sections"][0]["source_path"] is None
 
     def it_flat_mode_preserves_headers_footers_at_top_level(self) -> None:
@@ -507,25 +571,24 @@ class DescribeStructuredJson:
             footers=[Paragraph(text="foot")],
         )
         doc = Document(sections=[sec])
-        data = json.loads(doc.to_json(mode="flat"))
+        data = json.loads(to_json(doc, mode="flat"))
         assert data["headers"][0]["text"] == "head"
         assert data["footers"][0]["text"] == "foot"
 
     def it_section_uses_blocks_key_not_body(self) -> None:
         sec = Section(blocks=[Paragraph(text="x")])
         doc = Document(sections=[sec])
-        data = json.loads(doc.to_json(mode="structured"))
+        data = json.loads(to_json(doc, mode="structured"))
         assert "blocks" in data["sections"][0]
         assert "body" not in data["sections"][0]
 
     def it_invalid_mode_raises_value_error(self) -> None:
         doc = Document()
         with pytest.raises(ValueError, match="mode"):
-            doc.to_json(mode="bad")  # type: ignore[arg-type]
+            to_json(doc, mode="bad")  # type: ignore[arg-type]
 
 
 class DescribeNonParagraphHeaderFooter:
-
     def it_to_markdown_does_not_crash_with_table_in_header(self) -> None:
         sec = Section(
             blocks=[Paragraph(text="body")],
@@ -556,33 +619,36 @@ class DescribeNonParagraphHeaderFooter:
     def it_structured_json_serialises_table_in_header(self) -> None:
         sec = Section(headers=[Table(rows=[])])
         doc = Document(sections=[sec])
-        data = json.loads(doc.to_json(mode="structured"))
+        data = json.loads(to_json(doc, mode="structured"))
         assert data["sections"][0]["headers"][0]["type"] == "table"
 
 
 class DescribeHeadingDetection:
-
     def it_auto_mode_infers_headings(self) -> None:
-        doc = Document(body=[
-            Paragraph(text="제목", style=ParagraphStyle.HEADING1),
-            Paragraph(text="본문"),
-        ])
+        doc = Document(
+            body=[
+                Paragraph(text="제목", style=ParagraphStyle.HEADING1),
+                Paragraph(text="본문"),
+            ]
+        )
         md = doc.to_markdown()
         assert "# 제목" in md
 
     def it_none_mode_preserves_explicit_style_from_model(self) -> None:
-        doc = Document(body=[
-            Paragraph(text="제목", style=ParagraphStyle.HEADING1),
-        ])
+        doc = Document(
+            body=[
+                Paragraph(text="제목", style=ParagraphStyle.HEADING1),
+            ]
+        )
         md = doc.to_markdown()
         assert "# 제목" in md
 
 
 class DescribeHeadingDetectionValidation:
-
     def it_rejects_invalid_heading_detection_value(self, tmp_path) -> None:
         fake = tmp_path / "test.hwpx"
         fake.write_bytes(b"PK")  # won't be opened — validation fires first
         with pytest.raises(ValueError, match="heading_detection"):
             import openhanji
+
             openhanji.open(fake, heading_detection="bogus")

@@ -14,32 +14,20 @@ Covers:
 from __future__ import annotations
 
 import pathlib
-import zipfile
-
-import pytest
 
 import openhanji
-from openhanji.document import Paragraph, ParagraphStyle
-
+from openhanji.models.document import Paragraph, ParagraphStyle
+from tests.integration.builders import assert_block_indices_sequential, make_hwpx, sec as _sec_wrap
 
 # ---------------------------------------------------------------------------
 # Minimal HWPX builder helpers
 # ---------------------------------------------------------------------------
 
 _HEAD_NS = 'xmlns:hh="http://www.hancom.co.kr/hwpml/2011/head"'
-_SEC_NS = (
-    'xmlns:hs="http://www.hancom.co.kr/hwpml/2011/section"'
-    ' xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph"'
-    ' xmlns:ht="http://www.hancom.co.kr/hwpml/2011/table"'
-)
 
 
 def _hwpx(tmp_path: pathlib.Path, name: str, header: str, section: str) -> pathlib.Path:
-    path = tmp_path / name
-    with zipfile.ZipFile(path, "w") as zf:
-        zf.writestr("Contents/header.xml", header)
-        zf.writestr("Contents/section0.xml", section)
-    return path
+    return make_hwpx(tmp_path, name, section, header)
 
 
 def _header_with_numbering(num_id: str, num_format: str) -> str:
@@ -48,24 +36,24 @@ def _header_with_numbering(num_id: str, num_format: str) -> str:
         f'<?xml version="1.0" encoding="UTF-8"?>'
         f'<hh:head {_HEAD_NS} version="1.5" secCnt="1">'
         f'<hh:beginNum page="1" footnote="1" endnote="1" pic="1" tbl="1" equation="1"/>'
-        f'<hh:refList>'
+        f"<hh:refList>"
         f'<hh:fontfaces itemCnt="0"/>'
         f'<hh:charProperties itemCnt="1">'
         f'<hh:charPr id="0" height="1000"/>'
-        f'</hh:charProperties>'
+        f"</hh:charProperties>"
         f'<hh:numberings itemCnt="1">'
         f'<hh:numbering id="{num_id}" start="1">'
         f'<hh:paraHead start="1" level="1" numFormat="{num_format}">^1.</hh:paraHead>'
-        f'</hh:numbering>'
-        f'</hh:numberings>'
+        f"</hh:numbering>"
+        f"</hh:numberings>"
         f'<hh:paraProperties itemCnt="1">'
         f'<hh:paraPr id="0">'
         f'<hh:heading type="NUMBER" idRef="{num_id}" level="0"/>'
-        f'</hh:paraPr>'
-        f'</hh:paraProperties>'
+        f"</hh:paraPr>"
+        f"</hh:paraProperties>"
         f'<hh:styles itemCnt="0"/>'
-        f'</hh:refList>'
-        f'</hh:head>'
+        f"</hh:refList>"
+        f"</hh:head>"
     )
 
 
@@ -75,19 +63,19 @@ def _header_legacy_autonum() -> str:
         f'<?xml version="1.0" encoding="UTF-8"?>'
         f'<hh:head {_HEAD_NS} version="1.5" secCnt="1">'
         f'<hh:beginNum page="1" footnote="1" endnote="1" pic="1" tbl="1" equation="1"/>'
-        f'<hh:refList>'
+        f"<hh:refList>"
         f'<hh:fontfaces itemCnt="0"/>'
         f'<hh:charProperties itemCnt="1">'
         f'<hh:charPr id="0" height="1000"/>'
-        f'</hh:charProperties>'
+        f"</hh:charProperties>"
         f'<hh:paraProperties itemCnt="1">'
         f'<hh:paraPr id="0">'
         f'<hh:autoNumFormat numFormat="DIGIT"/>'
-        f'</hh:paraPr>'
-        f'</hh:paraProperties>'
+        f"</hh:paraPr>"
+        f"</hh:paraProperties>"
         f'<hh:styles itemCnt="0"/>'
-        f'</hh:refList>'
-        f'</hh:head>'
+        f"</hh:refList>"
+        f"</hh:head>"
     )
 
 
@@ -97,19 +85,19 @@ def _header_legacy_bullet() -> str:
         f'<?xml version="1.0" encoding="UTF-8"?>'
         f'<hh:head {_HEAD_NS} version="1.5" secCnt="1">'
         f'<hh:beginNum page="1" footnote="1" endnote="1" pic="1" tbl="1" equation="1"/>'
-        f'<hh:refList>'
+        f"<hh:refList>"
         f'<hh:fontfaces itemCnt="0"/>'
         f'<hh:charProperties itemCnt="1">'
         f'<hh:charPr id="0" height="1000"/>'
-        f'</hh:charProperties>'
+        f"</hh:charProperties>"
         f'<hh:paraProperties itemCnt="1">'
         f'<hh:paraPr id="0">'
-        f'<hh:bullet/>'
-        f'</hh:paraPr>'
-        f'</hh:paraProperties>'
+        f"<hh:bullet/>"
+        f"</hh:paraPr>"
+        f"</hh:paraProperties>"
         f'<hh:styles itemCnt="0"/>'
-        f'</hh:refList>'
-        f'</hh:head>'
+        f"</hh:refList>"
+        f"</hh:head>"
     )
 
 
@@ -119,19 +107,19 @@ def _header_missing_ref() -> str:
         f'<?xml version="1.0" encoding="UTF-8"?>'
         f'<hh:head {_HEAD_NS} version="1.5" secCnt="1">'
         f'<hh:beginNum page="1" footnote="1" endnote="1" pic="1" tbl="1" equation="1"/>'
-        f'<hh:refList>'
+        f"<hh:refList>"
         f'<hh:fontfaces itemCnt="0"/>'
         f'<hh:charProperties itemCnt="1">'
         f'<hh:charPr id="0" height="1000"/>'
-        f'</hh:charProperties>'
+        f"</hh:charProperties>"
         f'<hh:paraProperties itemCnt="1">'
         f'<hh:paraPr id="0">'
         f'<hh:heading type="NUMBER" idRef="99" level="0"/>'
-        f'</hh:paraPr>'
-        f'</hh:paraProperties>'
+        f"</hh:paraPr>"
+        f"</hh:paraProperties>"
         f'<hh:styles itemCnt="0"/>'
-        f'</hh:refList>'
-        f'</hh:head>'
+        f"</hh:refList>"
+        f"</hh:head>"
     )
 
 
@@ -139,42 +127,38 @@ def _body_para(text: str, para_pr_id: str = "0") -> str:
     return (
         f'<hp:p paraPrIDRef="{para_pr_id}">'
         f'<hp:run charPrIDRef="0"><hp:t>{text}</hp:t></hp:run>'
-        f'</hp:p>'
+        f"</hp:p>"
     )
 
 
 def _body_table_with_para(text: str, para_pr_id: str = "0") -> str:
     return (
         '<ht:tbl numRows="1" numCols="1">'
-        '<ht:tr>'
-        '<ht:tc>'
-        '<ht:subList>'
+        "<ht:tr>"
+        "<ht:tc>"
+        "<ht:subList>"
         f'<hp:p paraPrIDRef="{para_pr_id}">'
         f'<hp:run charPrIDRef="0"><hp:t>{text}</hp:t></hp:run>'
-        f'</hp:p>'
-        '</ht:subList>'
-        '</ht:tc>'
-        '</ht:tr>'
-        '</ht:tbl>'
+        f"</hp:p>"
+        "</ht:subList>"
+        "</ht:tc>"
+        "</ht:tr>"
+        "</ht:tbl>"
     )
 
 
 def _section(*body_parts: str) -> str:
-    return (
-        f'<?xml version="1.0" encoding="UTF-8"?>'
-        f'<hs:sec {_SEC_NS}>'
-        + "".join(body_parts)
-        + '</hs:sec>'
-    )
+    return _sec_wrap("".join(body_parts))
 
 
 # ---------------------------------------------------------------------------
 
-class DescribeOrderedListInBody:
 
+class DescribeOrderedListInBody:
     def it_detects_list_ordered_from_digit_numformat(self, tmp_path):
         path = _hwpx(
-            tmp_path, "ordered.hwpx",
+            tmp_path,
+            "ordered.hwpx",
             _header_with_numbering("1", "DIGIT"),
             _section(_body_para("item one")),
         )
@@ -183,7 +167,8 @@ class DescribeOrderedListInBody:
 
     def it_detects_list_ordered_from_latin_small_numformat(self, tmp_path):
         path = _hwpx(
-            tmp_path, "ordered_latin.hwpx",
+            tmp_path,
+            "ordered_latin.hwpx",
             _header_with_numbering("1", "LATIN_SMALL"),
             _section(_body_para("item a")),
         )
@@ -192,7 +177,8 @@ class DescribeOrderedListInBody:
 
     def it_detects_list_ordered_from_roman_small_numformat(self, tmp_path):
         path = _hwpx(
-            tmp_path, "ordered_roman.hwpx",
+            tmp_path,
+            "ordered_roman.hwpx",
             _header_with_numbering("1", "ROMAN_SMALL"),
             _section(_body_para("item i")),
         )
@@ -201,10 +187,10 @@ class DescribeOrderedListInBody:
 
 
 class DescribeUnorderedListInBody:
-
     def it_detects_list_unordered_from_disc_numformat(self, tmp_path):
         path = _hwpx(
-            tmp_path, "bullet_disc.hwpx",
+            tmp_path,
+            "bullet_disc.hwpx",
             _header_with_numbering("1", "DISC"),
             _section(_body_para("bullet item")),
         )
@@ -213,7 +199,8 @@ class DescribeUnorderedListInBody:
 
     def it_detects_list_unordered_from_bullet_numformat(self, tmp_path):
         path = _hwpx(
-            tmp_path, "bullet_bullet.hwpx",
+            tmp_path,
+            "bullet_bullet.hwpx",
             _header_with_numbering("1", "BULLET"),
             _section(_body_para("bullet item")),
         )
@@ -222,7 +209,8 @@ class DescribeUnorderedListInBody:
 
     def it_detects_list_unordered_from_circle_numformat(self, tmp_path):
         path = _hwpx(
-            tmp_path, "bullet_circle.hwpx",
+            tmp_path,
+            "bullet_circle.hwpx",
             _header_with_numbering("1", "CIRCLE"),
             _section(_body_para("bullet item")),
         )
@@ -231,10 +219,10 @@ class DescribeUnorderedListInBody:
 
 
 class DescribeListInTableCell:
-
     def it_detects_ordered_list_inside_cell(self, tmp_path):
         path = _hwpx(
-            tmp_path, "cell_ordered.hwpx",
+            tmp_path,
+            "cell_ordered.hwpx",
             _header_with_numbering("1", "DIGIT"),
             _section(_body_table_with_para("cell item")),
         )
@@ -247,7 +235,8 @@ class DescribeListInTableCell:
 
     def it_detects_unordered_list_inside_cell(self, tmp_path):
         path = _hwpx(
-            tmp_path, "cell_bullet.hwpx",
+            tmp_path,
+            "cell_bullet.hwpx",
             _header_with_numbering("1", "DISC"),
             _section(_body_table_with_para("cell bullet")),
         )
@@ -258,10 +247,10 @@ class DescribeListInTableCell:
 
 
 class DescribeLegacyListTags:
-
     def it_ordered_from_legacy_autoNumFormat(self, tmp_path):
         path = _hwpx(
-            tmp_path, "legacy_autonum.hwpx",
+            tmp_path,
+            "legacy_autonum.hwpx",
             _header_legacy_autonum(),
             _section(_body_para("legacy ordered")),
         )
@@ -270,7 +259,8 @@ class DescribeLegacyListTags:
 
     def it_unordered_from_legacy_bullet_tag(self, tmp_path):
         path = _hwpx(
-            tmp_path, "legacy_bullet.hwpx",
+            tmp_path,
+            "legacy_bullet.hwpx",
             _header_legacy_bullet(),
             _section(_body_para("legacy bullet")),
         )
@@ -279,10 +269,10 @@ class DescribeLegacyListTags:
 
 
 class DescribeMissingNumberingRef:
-
     def it_does_not_crash_on_missing_numbering_id(self, tmp_path):
         path = _hwpx(
-            tmp_path, "missing_ref.hwpx",
+            tmp_path,
+            "missing_ref.hwpx",
             _header_missing_ref(),
             _section(_body_para("orphan list item")),
         )
@@ -291,7 +281,8 @@ class DescribeMissingNumberingRef:
 
     def it_falls_back_to_ordered_when_ref_missing(self, tmp_path):
         path = _hwpx(
-            tmp_path, "missing_ref_style.hwpx",
+            tmp_path,
+            "missing_ref_style.hwpx",
             _header_missing_ref(),
             _section(_body_para("orphan")),
         )
@@ -301,10 +292,10 @@ class DescribeMissingNumberingRef:
 
 
 class DescribeBlockOrderPreserved:
-
     def it_block_count_unchanged_with_list_items(self, tmp_path):
         path = _hwpx(
-            tmp_path, "order.hwpx",
+            tmp_path,
+            "order.hwpx",
             _header_with_numbering("1", "DIGIT"),
             _section(
                 _body_para("item 1"),
@@ -317,7 +308,8 @@ class DescribeBlockOrderPreserved:
 
     def it_block_indices_are_sequential(self, tmp_path):
         path = _hwpx(
-            tmp_path, "order_idx.hwpx",
+            tmp_path,
+            "order_idx.hwpx",
             _header_with_numbering("1", "DIGIT"),
             _section(
                 _body_para("item 1"),
@@ -325,11 +317,12 @@ class DescribeBlockOrderPreserved:
             ),
         )
         doc = openhanji.open(path)
-        assert [b.index for b in doc.blocks] == list(range(len(doc.blocks)))
+        assert_block_indices_sequential(doc)
 
     def it_text_content_unchanged(self, tmp_path):
         path = _hwpx(
-            tmp_path, "order_text.hwpx",
+            tmp_path,
+            "order_text.hwpx",
             _header_with_numbering("1", "DIGIT"),
             _section(_body_para("list item text")),
         )
@@ -338,10 +331,10 @@ class DescribeBlockOrderPreserved:
 
 
 class DescribeHeadingDetectionNonePreservesLists:
-
     def it_list_survives_heading_detection_none(self, tmp_path):
         path = _hwpx(
-            tmp_path, "none_mode_list.hwpx",
+            tmp_path,
+            "none_mode_list.hwpx",
             _header_with_numbering("1", "DIGIT"),
             _section(_body_para("list item")),
         )
@@ -350,7 +343,8 @@ class DescribeHeadingDetectionNonePreservesLists:
 
     def it_bullet_survives_heading_detection_none(self, tmp_path):
         path = _hwpx(
-            tmp_path, "none_mode_bullet.hwpx",
+            tmp_path,
+            "none_mode_bullet.hwpx",
             _header_with_numbering("1", "DISC"),
             _section(_body_para("bullet item")),
         )
@@ -363,13 +357,16 @@ class DescribeRealDocumentListDetection:
 
     FIXTURE = (
         pathlib.Path(__file__).parent.parent
-        / "test_files" / "hwpx" / "lab_cv-headings-lists-equation-footer.hwpx"
+        / "test_files"
+        / "hwpx"
+        / "lab_cv-headings-lists-equation-footer.hwpx"
     )
 
     def it_detects_ordered_lists_in_table_cells(self):
         doc = openhanji.open(self.FIXTURE)
         cell_lists = [
-            b for tbl in doc.tables
+            b
+            for tbl in doc.tables
             for row in tbl.rows
             for cell in row.cells
             for b in cell.blocks
@@ -381,7 +378,8 @@ class DescribeRealDocumentListDetection:
         doc = openhanji.open(self.FIXTURE)
         # top-level body paragraphs should not be misclassified as lists
         body_lists = [
-            p for p in doc.paragraphs
+            p
+            for p in doc.paragraphs
             if p.style in (ParagraphStyle.LIST_ORDERED, ParagraphStyle.LIST_UNORDERED)
         ]
         assert body_lists == []
@@ -389,7 +387,9 @@ class DescribeRealDocumentListDetection:
     def it_service_proposal_has_41_ordered_list_paragraphs(self):
         path = (
             pathlib.Path(__file__).parent.parent
-            / "test_files" / "hwpx" / "lab_service-proposal.hwpx"
+            / "test_files"
+            / "hwpx"
+            / "lab_service-proposal.hwpx"
         )
         doc = openhanji.open(path)
         lists = [p for p in doc.paragraphs if p.style == ParagraphStyle.LIST_ORDERED]
