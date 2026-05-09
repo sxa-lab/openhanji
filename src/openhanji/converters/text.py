@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from openhanji.document import Document, ImageRef, Paragraph, Table
+from openhanji.models.document import Document, ImageRef, Paragraph, Table
 
 
 def to_text(doc: Document) -> str:
