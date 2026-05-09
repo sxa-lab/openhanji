@@ -489,8 +489,9 @@ class HwpxParser(BaseParser):
                     index += 1
             else:
                 if self.strict:
+                    parent = _strip_ns(elem.tag)
                     raise UnknownRecordError(
-                        f"Unrecognised block element <{tag}> inside <{_strip_ns(elem.tag)}>"
+                        f"Unrecognised block element <{tag}> inside <{parent}>"
                     )
                 index = self._walk(
                     child, body, index, bindata, header_index, headers, footers
