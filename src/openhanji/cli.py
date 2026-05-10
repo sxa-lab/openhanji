@@ -87,7 +87,7 @@ def _resolve_single_out(
     "--strict",
     is_flag=True,
     default=False,
-    help="Raise errors on unknown content instead of skipping.",
+    help="Raise on unknown content and malformed present XML parts.",
 )
 @click.option(
     "--with-images",
@@ -109,7 +109,7 @@ def _resolve_single_out(
     default=None,
     help=(
         "Comma-separated extensions to process in directory mode, e.g. hwpx,hwp. "
-        "Default: all supported."
+        "Default: all recognised Hancom extensions; unsupported formats are skipped."
     ),
 )
 @click.option(
@@ -137,7 +137,7 @@ def extract(
     fmt = format.lower()
     hd = cast(HeadingDetection, heading_detection)
 
-    #--- single file ---
+    # --- single file ---
     if path.is_file():
         click.echo(f"Parsing {path.name}...", nl=False)
         t0 = time.monotonic()
@@ -157,7 +157,7 @@ def extract(
         click.echo(f" Written to {out_path} ({elapsed:.1f}s)")
         return
 
-    #--- directory mode ---
+    # --- directory mode ---
     out_root = out if out is not None else pathlib.Path.cwd() / "extracted"
 
     if types:
@@ -180,7 +180,7 @@ def extract(
 
     out_root.mkdir(parents=True, exist_ok=True)
 
-    #Mixed-type: more than one distinct extension → per-type subfolders
+    # Mixed-type: more than one distinct extension -> per-type subfolders
     present_exts = {f.suffix.lower() for f in files}
     use_subfolders = len(present_exts) > 1
 

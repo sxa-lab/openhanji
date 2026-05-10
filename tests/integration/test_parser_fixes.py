@@ -17,7 +17,6 @@ from openhanji.models.document import (
     Row,
     Table,
 )
-
 from tests.integration.builders import make_charpr_hwpx
 
 TEST_FILES = pathlib.Path(__file__).parent.parent / "test_files"

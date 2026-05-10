@@ -18,7 +18,12 @@ import openhanji
 from openhanji.converters.json import to_json
 from openhanji.exceptions import CorruptedFileError, UnknownRecordError
 from openhanji.models.document import Document, ImageRef, ParagraphStyle
-from tests.integration.builders import assert_block_indices_sequential, make_hwpx, sec
+from tests.integration.builders import (
+    MINIMAL_HEADER,
+    assert_block_indices_sequential,
+    make_hwpx,
+    sec,
+)
 
 TEST_FILES = pathlib.Path(__file__).parent.parent / "test_files"
 BASIC = TEST_FILES / "hwpx" / "sxa_owpml-structure-coverage.hwpx"
@@ -218,6 +223,102 @@ class TestErrorHandling:
         with pytest.raises(CorruptedFileError):
             openhanji.open(path, strict=True)
 
+    def test_malformed_header_non_strict_warns_and_continues(self, tmp_path, caplog):
+        section_xml = sec("<hp:p><hp:run><hp:t>본문</hp:t></hp:run></hp:p>")
+        path = make_hwpx(tmp_path, "bad_header.hwpx", section_xml, "<<bad header>>")
+        with caplog.at_level(logging.WARNING, logger="openhanji.parsers.hwpx_index"):
+            doc = openhanji.open(path)
+        assert [para.text for para in doc.paragraphs] == ["본문"]
+        assert any(
+            "Could not parse header.xml" in record.message
+            for record in caplog.records
+        )
+
+    def test_malformed_header_strict_raises(self, tmp_path):
+        section_xml = sec("<hp:p><hp:run><hp:t>본문</hp:t></hp:run></hp:p>")
+        path = make_hwpx(
+            tmp_path,
+            "bad_header_strict.hwpx",
+            section_xml,
+            "<<bad header>>",
+        )
+        with pytest.raises(CorruptedFileError):
+            openhanji.open(path, strict=True)
+
+    def test_invalid_header_numeric_value_non_strict_warns_and_continues(
+        self, tmp_path, caplog
+    ):
+        header = (
+            '<hh:head xmlns:hh="http://www.hancom.co.kr/hwpml/2011/head">'
+            "<hh:charProperties>"
+            '<hh:charPr id="1" height="bad"/>'
+            "</hh:charProperties>"
+            "</hh:head>"
+        )
+        section_xml = sec(
+            '<hp:p><hp:run charPrIDRef="1"><hp:t>본문</hp:t></hp:run></hp:p>'
+        )
+        path = make_hwpx(tmp_path, "bad_header_number.hwpx", section_xml, header)
+
+        with caplog.at_level(logging.WARNING, logger="openhanji.parsers.hwpx_index"):
+            doc = openhanji.open(path)
+
+        assert [para.text for para in doc.paragraphs] == ["본문"]
+        assert doc.paragraphs[0].runs[0].font_size is None
+        assert any(
+            "Invalid numeric value" in record.message
+            for record in caplog.records
+        )
+
+    def test_invalid_header_numeric_value_strict_raises(self, tmp_path):
+        header = (
+            '<hh:head xmlns:hh="http://www.hancom.co.kr/hwpml/2011/head">'
+            "<hh:charProperties>"
+            '<hh:charPr id="1" height="bad"/>'
+            "</hh:charProperties>"
+            "</hh:head>"
+        )
+        section_xml = sec(
+            '<hp:p><hp:run charPrIDRef="1"><hp:t>본문</hp:t></hp:run></hp:p>'
+        )
+        path = make_hwpx(
+            tmp_path, "bad_header_number_strict.hwpx", section_xml, header
+        )
+
+        with pytest.raises(CorruptedFileError):
+            openhanji.open(path, strict=True)
+
+    def test_malformed_content_hpf_non_strict_warns_and_uses_section_fallback(
+        self, tmp_path, caplog
+    ):
+        path = tmp_path / "bad_content.hwpx"
+        with zipfile.ZipFile(path, "w") as zf:
+            zf.writestr("Contents/header.xml", MINIMAL_HEADER)
+            zf.writestr("Contents/content.hpf", "<<bad content>>")
+            zf.writestr(
+                "Contents/section0.xml",
+                sec("<hp:p><hp:run><hp:t>본문</hp:t></hp:run></hp:p>"),
+            )
+        with caplog.at_level(logging.WARNING, logger="openhanji.parsers.hwpx_index"):
+            doc = openhanji.open(path)
+        assert [para.text for para in doc.paragraphs] == ["본문"]
+        assert any(
+            "Could not parse content.hpf" in record.message
+            for record in caplog.records
+        )
+
+    def test_malformed_content_hpf_strict_raises(self, tmp_path):
+        path = tmp_path / "bad_content_strict.hwpx"
+        with zipfile.ZipFile(path, "w") as zf:
+            zf.writestr("Contents/header.xml", MINIMAL_HEADER)
+            zf.writestr("Contents/content.hpf", "<<bad content>>")
+            zf.writestr(
+                "Contents/section0.xml",
+                sec("<hp:p><hp:run><hp:t>본문</hp:t></hp:run></hp:p>"),
+            )
+        with pytest.raises(CorruptedFileError):
+            openhanji.open(path, strict=True)
+
     def test_unknown_block_element_strict_raises(self, tmp_path):
         section_xml = sec(
             "<hp:unknownFutureElement>"
@@ -228,15 +329,49 @@ class TestErrorHandling:
         with pytest.raises(UnknownRecordError):
             openhanji.open(path, strict=True)
 
-    def test_unknown_block_element_non_strict_skips(self, tmp_path):
+    def test_unknown_block_element_non_strict_warns_and_descends(
+        self, tmp_path, caplog
+    ):
         section_xml = sec(
             "<hp:unknownFutureElement>"
             "<hp:p><hp:run><hp:t>내용</hp:t></hp:run></hp:p>"
             "</hp:unknownFutureElement>"
         )
         path = make_hwpx(tmp_path, "unknown_nonstrict.hwpx", section_xml)
-        doc = openhanji.open(path, strict=False)
+        with caplog.at_level(logging.WARNING, logger="openhanji.parsers.hwpx"):
+            doc = openhanji.open(path, strict=False)
         assert isinstance(doc, Document)
+        assert [para.text for para in doc.paragraphs] == ["내용"]
+        assert any(
+            "Unrecognised block element <unknownFutureElement>" in record.message
+            for record in caplog.records
+        )
+
+    def test_invalid_outline_level_non_strict_defaults_to_zero(
+        self, tmp_path, caplog
+    ):
+        section_xml = sec(
+            '<hp:p outlineLevel="bad"><hp:run><hp:t>본문</hp:t></hp:run></hp:p>'
+        )
+        path = make_hwpx(tmp_path, "bad_outline.hwpx", section_xml)
+
+        with caplog.at_level(logging.WARNING, logger="openhanji.parsers.hwpx"):
+            doc = openhanji.open(path)
+
+        assert doc.paragraphs[0].level == 0
+        assert any(
+            "Invalid numeric value" in record.message
+            for record in caplog.records
+        )
+
+    def test_invalid_outline_level_strict_raises(self, tmp_path):
+        section_xml = sec(
+            '<hp:p outlineLevel="bad"><hp:run><hp:t>본문</hp:t></hp:run></hp:p>'
+        )
+        path = make_hwpx(tmp_path, "bad_outline_strict.hwpx", section_xml)
+
+        with pytest.raises(CorruptedFileError):
+            openhanji.open(path, strict=True)
 
     def test_text_box_gso_text_extracted(self, tmp_path):
         section_xml = sec(
@@ -378,6 +513,55 @@ class TestErrorHandling:
         assert "| A | B |" in markdown
         assert "<table>" not in markdown
 
+    def test_table_caption_attribute_is_preserved(self, tmp_path):
+        section_xml = sec(
+            '<ht:tbl caption="Quarterly totals">'
+            "<ht:tr>"
+            "<ht:tc><hp:p><hp:run><hp:t>A</hp:t></hp:run></hp:p></ht:tc>"
+            "</ht:tr>"
+            "</ht:tbl>"
+        )
+        doc = openhanji.open(make_hwpx(tmp_path, "table_caption.hwpx", section_xml))
+        assert doc.tables[0].caption == "Quarterly totals"
+        assert json.loads(to_json(doc))["body"][0]["caption"] == "Quarterly totals"
+        assert "*Quarterly totals*" in doc.to_markdown()
+
+    def test_invalid_cell_span_non_strict_defaults_to_one(self, tmp_path, caplog):
+        section_xml = sec(
+            "<ht:tbl>"
+            "<ht:tr>"
+            '<ht:tc><ht:cellSpan colSpan="bad" rowSpan="bad"/>'
+            "<hp:p><hp:run><hp:t>A</hp:t></hp:run></hp:p></ht:tc>"
+            "</ht:tr>"
+            "</ht:tbl>"
+        )
+        path = make_hwpx(tmp_path, "bad_span.hwpx", section_xml)
+
+        with caplog.at_level(logging.WARNING, logger="openhanji.parsers.hwpx"):
+            doc = openhanji.open(path)
+
+        cell = doc.tables[0].rows[0].cells[0]
+        assert cell.col_span == 1
+        assert cell.row_span == 1
+        assert any(
+            "Invalid numeric value" in record.message
+            for record in caplog.records
+        )
+
+    def test_invalid_cell_span_strict_raises(self, tmp_path):
+        section_xml = sec(
+            "<ht:tbl>"
+            "<ht:tr>"
+            '<ht:tc><ht:cellSpan colSpan="bad" rowSpan="bad"/>'
+            "<hp:p><hp:run><hp:t>A</hp:t></hp:run></hp:p></ht:tc>"
+            "</ht:tr>"
+            "</ht:tbl>"
+        )
+        path = make_hwpx(tmp_path, "bad_span_strict.hwpx", section_xml)
+
+        with pytest.raises(CorruptedFileError):
+            openhanji.open(path, strict=True)
+
     def test_complex_table_markdown_uses_html_and_preserves_spans(self, tmp_path):
         section_xml = sec(
             "<ht:tbl>"
@@ -413,7 +597,7 @@ class TestErrorHandling:
         )
         path = tmp_path / "bincase.hwpx"
         with zipfile.ZipFile(path, "w") as zf:
-            zf.writestr("Contents/header.xml", "<hh:head/>")
+            zf.writestr("Contents/header.xml", MINIMAL_HEADER)
             zf.writestr("Contents/section0.xml", section_xml)
             zf.writestr("bindata/image1.png", png_bytes)  # lowercase prefix
         doc = openhanji.open(path, with_images=True)
@@ -434,7 +618,7 @@ class TestErrorHandling:
         )
         path = tmp_path / "binname.hwpx"
         with zipfile.ZipFile(path, "w") as zf:
-            zf.writestr("Contents/header.xml", "<hh:head/>")
+            zf.writestr("Contents/header.xml", MINIMAL_HEADER)
             zf.writestr("Contents/section0.xml", section_xml)
             zf.writestr("BinData/image1.png", png_bytes)
         doc = openhanji.open(path, with_images=True)
@@ -458,12 +642,79 @@ class TestErrorHandling:
             "</opf:package>"
         )
         with zipfile.ZipFile(path, "w") as zf:
-            zf.writestr("Contents/header.xml", "<hh:head/>")
+            zf.writestr("Contents/header.xml", MINIMAL_HEADER)
             zf.writestr("Contents/content.hpf", content)
             zf.writestr("Contents/section0.xml", section0)
             zf.writestr("Contents/section1.xml", section1)
         doc = openhanji.open(path)
         assert [para.text for para in doc.paragraphs] == ["one", "zero"]
+
+    def test_spine_order_resolves_root_style_hrefs_and_ignores_header(
+        self, tmp_path
+    ):
+        path = tmp_path / "spine_root_hrefs.hwpx"
+        section0 = sec("<hp:p><hp:run><hp:t>zero</hp:t></hp:run></hp:p>")
+        section1 = sec("<hp:p><hp:run><hp:t>one</hp:t></hp:run></hp:p>")
+        content = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<opf:package xmlns:opf="http://www.idpf.org/2007/opf">'
+            "<opf:manifest>"
+            '<opf:item id="header" href="Contents/header.xml"/>'
+            '<opf:item id="sec0" href="Contents/section0.xml"/>'
+            '<opf:item id="sec1" href="Contents/section1.xml"/>'
+            "</opf:manifest>"
+            "<opf:spine>"
+            '<opf:itemref idref="header"/>'
+            '<opf:itemref idref="sec1"/>'
+            '<opf:itemref idref="sec0"/>'
+            "</opf:spine>"
+            "</opf:package>"
+        )
+        with zipfile.ZipFile(path, "w") as zf:
+            zf.writestr("Contents/header.xml", MINIMAL_HEADER)
+            zf.writestr("Contents/content.hpf", content)
+            zf.writestr("Contents/section0.xml", section0)
+            zf.writestr("Contents/section1.xml", section1)
+
+        doc = openhanji.open(path, strict=True)
+
+        assert [section.source_path for section in doc.sections] == [
+            "Contents/section1.xml",
+            "Contents/section0.xml",
+        ]
+        assert [para.text for para in doc.paragraphs] == ["one", "zero"]
+
+    def test_spine_relative_href_prefers_content_hpf_directory(self, tmp_path):
+        path = tmp_path / "spine_relative_hrefs.hwpx"
+        content = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<opf:package xmlns:opf="http://www.idpf.org/2007/opf">'
+            "<opf:manifest>"
+            '<opf:item id="sec0" href="section0.xml"/>'
+            "</opf:manifest>"
+            "<opf:spine>"
+            '<opf:itemref idref="sec0"/>'
+            "</opf:spine>"
+            "</opf:package>"
+        )
+        with zipfile.ZipFile(path, "w") as zf:
+            zf.writestr("Contents/header.xml", MINIMAL_HEADER)
+            zf.writestr("Contents/content.hpf", content)
+            zf.writestr(
+                "section0.xml",
+                sec("<hp:p><hp:run><hp:t>wrong root</hp:t></hp:run></hp:p>"),
+            )
+            zf.writestr(
+                "Contents/section0.xml",
+                sec("<hp:p><hp:run><hp:t>right content dir</hp:t></hp:run></hp:p>"),
+            )
+
+        doc = openhanji.open(path, strict=True)
+
+        assert [section.source_path for section in doc.sections] == [
+            "Contents/section0.xml"
+        ]
+        assert [para.text for para in doc.paragraphs] == ["right content dir"]
 
     def test_ref_list_font_and_paragraph_resolution(self, tmp_path):
         path = tmp_path / "style.hwpx"
@@ -536,7 +787,7 @@ class TestErrorHandling:
         )
         path = tmp_path / "imgtest.hwpx"
         with zipfile.ZipFile(path, "w") as zf:
-            zf.writestr("Contents/header.xml", "<hh:head/>")
+            zf.writestr("Contents/header.xml", MINIMAL_HEADER)
             zf.writestr("Contents/section0.xml", section_xml)
             zf.writestr("BinData/image1.png", png_bytes)
         doc = openhanji.open(path, with_images=True)
