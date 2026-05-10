@@ -14,7 +14,7 @@ cell: openhanji.Cell
 style: openhanji.ParagraphStyle
 ```
 
-Re-exported names: `open`, `Document`, `Section`, `Paragraph`, `Run`, `Table`, `Row`,
+Re-exported names: `open`, `Document`, `HancomDocument`, `Section`, `Paragraph`, `Run`, `Table`, `Row`,
 `Cell`, `ImageRef`, `Metadata`, `ParagraphStyle`, `OpenHanjiError`,
 `NotSupportedError`, `CorruptedFileError`, `UnknownRecordError`.
 
@@ -32,11 +32,11 @@ package. It:
 1. Resolves `path` to a `pathlib.Path` and verifies it exists
    (raises `FileNotFoundError` if not — note: this is the standard
    library exception, **not** an `OpenHanjiError` subclass).
-2. Lower-cases the suffix and checks it against the supported set
-   (`{".hwpx"}` in v0.1.0).
-3. Raises [`NotSupportedError`](exceptions.md#notsupportederror) for
-   any other extension — including `.hwp`, which is planned for v0.2.
-4. Lazily imports `HwpxParser`, instantiates it with `strict`,
+2. Lower-cases the suffix and dispatches on it — `.hwpx` goes to
+   `HwpxParser`; `.hwp`, `.cell`, `.show` raise `NotSupportedError`
+   with a "Coming soon!" message; anything else raises `NotSupportedError`
+   with a generic unsupported-format message.
+3. Lazily imports `HwpxParser`, instantiates it with `strict`,
    `with_images`, and `heading_detection`, and returns `parser.parse(path)`.
 
 ### `with_images=True` — opt in to image binaries
@@ -97,7 +97,7 @@ Use `strict=True` when you need fail-loud guarantees:
 
 In strict mode, unknown XML raises
 [`UnknownRecordError`](exceptions.md#unknownrecorderror) and malformed
-parts raise
+XML sections raise
 [`CorruptedFileError`](exceptions.md#corruptedfileerror). Both inherit
 from [`OpenHanjiError`](exceptions.md#openhanjierror), so a single
 `except OpenHanjiError:` catches every parser-level failure.
@@ -108,7 +108,7 @@ from [`OpenHanjiError`](exceptions.md#openhanjierror), so a single
 FileNotFoundError                # path doesn't exist (stdlib)
 OpenHanjiError                   # base for everything below
 ├── NotSupportedError            # unsupported extension (e.g. .hwp in v0.1)
-├── CorruptedFileError           # malformed zip / missing required parts
+├── CorruptedFileError           # malformed zip / malformed XML section
 └── UnknownRecordError           # strict mode: unrecognised XML element
 ```
 

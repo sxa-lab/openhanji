@@ -10,7 +10,7 @@ version. Surrounding prose is hand-written.
 | [openhanji](openhanji.md) | The top-level `openhanji.open()` entry point and version constant. |
 | [Document model](document.md) | `Document`, `Paragraph`, `Run`, `Table`/`Row`/`Cell`, `ImageRef`, `Metadata`, `ParagraphStyle`. |
 | [Parsers](parsers.md) | `BaseParser` ABC and the `HwpxParser` implementation. |
-| [Converters](converters.md) | `to_markdown()` and `to_text()` functions. |
+| [Converters](converters.md) | `to_markdown()`, `to_text()`, and `to_json()` functions. |
 | [Exceptions](exceptions.md) | `OpenHanjiError` and its subclasses. |
 | [CLI internals](cli.md) | The `click` command group, for embedders. |
 
@@ -28,4 +28,4 @@ view converters iterate, and its element type
 `HwpxParser` and the parser internals (`HeaderIndex`, `CharShape`, the
 `_walk` / `_process_p` walker) are **internal**. They're documented
 here for contributors and advanced embedders, but their signatures
-may change without a major version bump.
+will change without a major version bump.
