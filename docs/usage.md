@@ -67,7 +67,7 @@ for image in doc.images:
 ### Lists
 
 ```python
-from openhanji.document import ParagraphStyle
+from openhanji.models.document import ParagraphStyle
 
 for para in doc.paragraphs:
     if para.style == ParagraphStyle.LIST_ORDERED:
@@ -136,8 +136,10 @@ Images inside cells are in `cell.images`.
 ## Convert to JSON / Markdown / text
 
 ```python
-print(doc.to_json())                    # flat body list, run-level detail
-print(doc.to_json(mode="structured"))   # one object per section
+from openhanji.converters.json import to_json
+
+print(to_json(doc))                     # flat body list, run-level detail
+print(to_json(doc, mode="structured"))  # one object per section
 print(doc.to_markdown())                # GFM; complex tables → HTML
 print(doc.to_text())                    # plain text, no formatting
 ```
@@ -145,7 +147,7 @@ print(doc.to_text())                    # plain text, no formatting
 | Format     | Best for                                 | Note                                             |
 | ---------- | ---------------------------------------- | ------------------------------------------------ |
 | `json`     | RAG ingestion, full-fidelity metadata    | Images `null` by default; use `with_images=True` |
-| `markdown` | LLM context, human-readable rendering    | Underline HTML-only; complex tables → `<table>`  |
+| `markdown` | LLM context, human-readable rendering    | Underline HTML-only; complex tables fall back to `<table>`  |
 | `text`     | Plain-text chunking, search indexing     | Drops all formatting                             |
 
 See [`Document`](api/document.md#document) for the JSON schema and
@@ -161,9 +163,11 @@ print(m.keywords)   # list[str]
 print(m.page_count) # int or None
 ```
 
-Title, author, and subject come from `content.hpf` OPF metadata, with
-`header.xml` Dublin Core as a fallback. Dates and keywords are
-reliably present in HWPX files.
+Title, author, and subject are read from `header.xml` (Dublin Core
+fields) first; `content.hpf` (the OWPML OPF package file) fills in
+only what `header.xml` left empty. In practice `header.xml` is more
+reliably populated in Hancom-saved files. Dates and keywords come from
+`content.hpf` only and are reliably present in HWPX files.
 
 ## What's next
 
