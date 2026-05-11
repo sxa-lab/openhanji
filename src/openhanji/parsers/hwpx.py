@@ -72,12 +72,11 @@ class HwpxParser(BaseParser):
     def _reindex_images(doc: Document) -> None:
         """Assign a document-global sequential index to every ImageRef.
 
-        Cell-local parsing assigns indices relative to the cell's block list,
-        which means every cell's first image gets index 0.  This walk visits
-        every ImageRef in document order (body blocks, then nested cell blocks
-        recursively) and reassigns a monotonically increasing counter so that
-        placeholder names like image_0, image_1, … are unique across the whole
-        document.
+        Local parsing assigns indices relative to the current block list, which
+        means images in different cells or header/footer regions can all start
+        at 0. This walk visits every ImageRef in section order and reassigns a
+        monotonically increasing counter so that placeholder names like image_0,
+        image_1, ... are unique across the whole document.
         """
         counter = 0
 
@@ -92,7 +91,10 @@ class HwpxParser(BaseParser):
                         for cell in row.cells:
                             visit_blocks(cell.blocks)
 
-        visit_blocks(doc.blocks)
+        for section in doc.sections:
+            visit_blocks(section.headers)
+            visit_blocks(section.blocks)
+            visit_blocks(section.footers)
 
     def _parse_body(self, zf: zipfile.ZipFile, names: list[str]) -> list[Section]:
         package = parse_package(zf, names, strict=self.strict)

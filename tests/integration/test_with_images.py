@@ -159,6 +159,40 @@ def _make_two_image_hwpx(tmp_path: pathlib.Path) -> pathlib.Path:
     return path
 
 
+def _make_body_and_footer_image_hwpx(tmp_path: pathlib.Path) -> pathlib.Path:
+    """Build a minimal HWPX with one body image and one footer image."""
+    header = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<hh:head xmlns:hh="http://www.hancom.co.kr/hwpml/2011/head"'
+        ' version="1.5" secCnt="1">'
+        '<hh:refList><hh:charProperties itemCnt="1">'
+        '<hh:charPr id="0" height="1000"><hh:fontRef hangul="0" latin="0"/></hh:charPr>'
+        "</hh:charProperties>"
+        '<hh:paraProperties itemCnt="1"><hh:paraPr id="0"/></hh:paraProperties>'
+        '<hh:styles itemCnt="0"/></hh:refList>'
+        "</hh:head>"
+    )
+    section = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<hs:sec xmlns:hs="http://www.hancom.co.kr/hwpml/2011/section"'
+        ' xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph">'
+        '<hp:p paraPrIDRef="0"><hp:run charPrIDRef="0">'
+        '<hp:pic title="body"><hp:img binaryItemIDRef="1"/></hp:pic>'
+        "</hp:run></hp:p>"
+        "<hp:ctrl><hp:footer><hp:subList>"
+        '<hp:p paraPrIDRef="0"><hp:run charPrIDRef="0">'
+        '<hp:pic title="footer"><hp:img binaryItemIDRef="2"/></hp:pic>'
+        "</hp:run></hp:p>"
+        "</hp:subList></hp:footer></hp:ctrl>"
+        "</hs:sec>"
+    )
+    path = tmp_path / "body_footer_images.hwpx"
+    with zipfile.ZipFile(path, "w") as zf:
+        zf.writestr("Contents/header.xml", header)
+        zf.writestr("Contents/section0.xml", section)
+    return path
+
+
 def _collect_cell_images(doc) -> list:
     """Collect all ImageRef nodes from inside table cells (not just top-level)."""
     from openhanji.models.document import ImageRef, Table
@@ -204,3 +238,9 @@ class DescribeImageSeqUniqueness:
         md = doc.to_markdown()
         assert 'src="image_0"' in md
         assert 'src="image_1"' in md
+
+    def it_assigns_distinct_image_seq_to_footer_images(self, tmp_path):
+        path = _make_body_and_footer_image_hwpx(tmp_path)
+        doc = openhanji.open(path)
+        images = [doc.images[0], doc.footers[0]]
+        assert sorted(img.image_seq for img in images) == [0, 1]
