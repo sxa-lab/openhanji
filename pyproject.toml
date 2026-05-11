@@ -51,7 +51,7 @@ openhanji = "openhanji.cli:main"
 Homepage = "https://github.com/sxa-lab/openhanji"
 Repository = "https://github.com/sxa-lab/openhanji"
 Issues = "https://github.com/sxa-lab/openhanji/issues"
-Documentation = "https://openhanji.readthedocs.io"
+Documentation = "https://github.com/sxa-lab/openhanji/tree/main/docs"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/openhanji"]
@@ -66,6 +66,7 @@ only-include = [
     ".readthedocs.yaml",
     "LICENSE",
     "NOTICE",
+    "CHANGELOG.md",
     "README.md",
     "README.en.md",
     "README.zh.md",
