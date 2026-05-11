@@ -68,8 +68,8 @@ When `path` is a directory:
    filter (sorted, for deterministic output ordering). Exit `1` with
    `No supported files found in {path}` if the walk finds nothing.
 4. Determine subfolder mode: if the filtered file list contains more
-   than one distinct extension, `use_subfolders = True` — output is
-   organised into per-type subdirectories (`hwpx/`, `cell/`, `show/`).
+   than one distinct extension, `use_subfolders = True` — successful output is
+   organised into per-type subdirectories (`hwpx/`, `hwp/`, `cell/`, `show/`).
    Same-type batches are written flat.
 5. Iterate with a tqdm progress bar (`unit="file"`, `desc="Extracting"`).
    The bar is disabled (`disable=verbose or not sys.stdout.isatty()`) —

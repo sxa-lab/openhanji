@@ -1,12 +1,16 @@
-[한국어](README.md) | [English](README.en.md) | [中文](README.zh.md) | [许可证](LICENSE) | [声明](NOTICE)
+[한국어](https://github.com/sxa-lab/openhanji/blob/main/README.md) | [English](https://github.com/sxa-lab/openhanji/blob/main/README.en.md) | [中文](https://github.com/sxa-lab/openhanji/blob/main/README.zh.md) | [许可证](https://github.com/sxa-lab/openhanji/blob/main/LICENSE) | [声明](https://github.com/sxa-lab/openhanji/blob/main/NOTICE)
 
-**用于 Hancom Office HWPX 文档的开源 Python 解析器**
+**用于 Hancom Office 文档的开源 Python 解析器和转换器**
 
-`v0.1.0` 是一个用于解析 HWPX 文档的 Python 包。它将文档读取为 `Document` 对象，并输出 JSON、Markdown 或纯文本。
+`v0.1.0` 将 HWPX 文档解析为结构化的 Python 文档模型，可导出为：
+- JSON
+- Markdown
+- 纯文本
 
-顶层 `doc.paragraphs`、`doc.tables`、`doc.images` 只暴露正文中的顶层块。
-`doc.blocks` 是跨所有章节平铺的全部块列表。嵌套表格和图片会保留在所属单元格的
-`cell.blocks` 中，而 `cell.text` 提供该单元格全部内容的递归纯文本摘要。
+**适用场景：**
+- 文档摄取与搜索
+- RAG 与 NLP 工作流
+- 需要 HWPX 文本或元数据的后端服务
 
 ---
 
@@ -23,83 +27,107 @@ import openhanji
 
 doc = openhanji.open("report.hwpx")
 
-#遍历段落
+# 遍历段落
 for paragraph in doc.paragraphs:
     print(paragraph.text)
 
-#遍历所有块（跨章节平铺）
+# 遍历所有块（跨章节平铺）
 for block in doc.blocks:
     print(type(block).__name__, getattr(block, "text", ""))
 
-#结构化输出
-print(doc.to_json())                        #平铺 "body" 数组（默认）
-print(doc.to_json(mode="structured"))       #按章节分组的数组
+# 结构化输出
+print(doc.to_json())                        # 平铺的 "body" 数组（默认）
+print(doc.to_json(mode="structured"))       # 按章节分组的数组
 print(doc.to_markdown())
 print(doc.to_text())
 
-#元数据
+# 元数据
 print(doc.metadata.title)
 print(doc.metadata.author)
 ```
 
 ## CLI
 
+Markdown 输出（默认）：
+
 ```bash
-#markdown（默认）- 标题和简单表格使用 Markdown，复杂表格回退为 HTML
 openhanji extract document.hwpx
 ```
 
+递归式纯文本提取：
+
 ```bash
-#text - 递归纯文本提取，包含嵌套表格内容
 openhanji extract document.hwpx --format text
 ```
 
+包含运行级别格式元数据的 JSON 输出。
+
+非默认的 `bold`、`italic`、`font_size` 和 `color` 值会包含在输出中。
+
 ```bash
-#json - 完整数据；仅在非默认时包含 bold/italic/font_size/color
 openhanji extract document.hwpx --format json
 ```
 
+短格式别名：
+
 ```bash
-#短格式别名
 openhanji extract document.hwpx -f json
 ```
 
-JSON 中默认值字段被省略 — 纯文本 Run 仅序列化为 `{"text": "..."}`.
-设置了 `header.xml` 值时，输出中会包含 `font_face`、`align`、`style_name`。
+当在 `header.xml` 中定义时，JSON 会包含 run 上解析后的 `font_face`，以及段落上的 `align` 和 `style_name` 值。
+
+默认值字段会被省略 — 纯文本 run 序列化为：
+
+```json
+{"text": "..."}
+```
+
+将输出保存到文件：
 
 ```bash
-#保存到文件
 openhanji extract document.hwpx -o output.md
 ```
 
+递归地将输入目录下的每个 `.hwpx` 转换到输出目录：
+
 ```bash
-#目录模式 - 递归转换输入目录下的所有 .hwpx 文件并写入输出目录
 openhanji extract ./docs/ -o ./output/ -f markdown
 ```
 
+Strict 模式在遇到未知内容和格式错误的现有 XML 部件时抛出错误，而不是跳过：
+
 ```bash
-#严格模式 - 遇到未知内容时直接报错，而不是跳过
 openhanji extract document.hwpx --strict
 ```
 
+读取并以 base64 嵌入图片二进制。
+
+默认情况下会跳过二进制图片读取，图片以占位符渲染。
+
 ```bash
-#with-images - 读取并以 base64 内联嵌入图片二进制（默认跳过读取，图片渲染为占位符）
 openhanji extract document.hwpx --with-images
 ```
 
-```bash
-#heading-detection - 标题检测策略（默认：auto）
-openhanji extract document.hwpx --heading-detection structural  #仅使用结构信号
-openhanji extract document.hwpx --heading-detection none        #所有段落均为 BODY
-```
+标题分类策略 (`auto`, `structural`, `none`)。
+
+`structural` 仅使用结构性标题信号。
+
+`none` 将所有段落视为 `BODY`。
 
 ```bash
-#查看版本
+openhanji extract document.hwpx --heading-detection structural
+openhanji extract document.hwpx --heading-detection none
+```
+
+打印版本：
+
+```bash
 openhanji --version
 ```
 
+打印文档元数据和内容统计信息，包括标题、作者、关键词、日期、页数，以及段落/表格/图片计数：
+
 ```bash
-#元数据 - 输出标题、作者、主题、关键词、日期、页数以及段落/表格/图片数量
 openhanji info document.hwpx
 ```
 

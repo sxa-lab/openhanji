@@ -10,7 +10,9 @@ from __future__ import annotations
 import posixpath
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
+from logging import Logger
 
+from openhanji.exceptions import CorruptedFileError
 from openhanji.models.document import ParagraphStyle
 
 
@@ -65,6 +67,28 @@ def _extract_hyperlink_url(field_begin: ET.Element) -> str | None:
 
 def _resolve_part(base_path: str, href: str) -> str:
     return posixpath.normpath(posixpath.join(posixpath.dirname(base_path), href))
+
+
+def _parse_int(
+    value: str | None,
+    *,
+    default: int,
+    field: str,
+    strict: bool,
+    logger: Logger,
+) -> int:
+    if value is None or value == "":
+        return default
+    try:
+        return int(value)
+    except ValueError as exc:
+        if strict:
+            message = f"Invalid numeric value for {field}: {value}"
+            raise CorruptedFileError(message) from exc
+        logger.warning(
+            "Invalid numeric value for %s: %s; using %s", field, value, default
+        )
+        return default
 
 
 _HEADING_STYLES = {

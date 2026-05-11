@@ -6,7 +6,7 @@ import pathlib
 
 import pytest
 
-from tests.integration.builders import make_hwpx, sec  # noqa: F401
+from tests.integration.builders import MINIMAL_HEADER, make_hwpx, sec  # noqa: F401
 
 
 @pytest.fixture()
@@ -19,7 +19,7 @@ def make_doc(tmp_path: pathlib.Path):
             doc = make_doc("<hp:p><hp:run><hp:t>hello</hp:t></hp:run></hp:p>")
     """
 
-    def _factory(body_xml: str, header_xml: str = "<hh:head/>") -> pathlib.Path:
+    def _factory(body_xml: str, header_xml: str = MINIMAL_HEADER) -> pathlib.Path:
         return make_hwpx(tmp_path, "test.hwpx", sec(body_xml), header_xml)
 
     return _factory

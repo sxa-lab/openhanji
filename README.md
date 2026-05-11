@@ -1,13 +1,16 @@
-[한국어](README.md) | [English](README.en.md) | [中文](README.zh.md) | [라이선스](LICENSE) | [고지사항](NOTICE)
+[한국어](https://github.com/sxa-lab/openhanji/blob/main/README.md) | [English](https://github.com/sxa-lab/openhanji/blob/main/README.en.md) | [中文](https://github.com/sxa-lab/openhanji/blob/main/README.zh.md) | [라이선스](https://github.com/sxa-lab/openhanji/blob/main/LICENSE) | [고지사항](https://github.com/sxa-lab/openhanji/blob/main/NOTICE)
 
-**한컴오피스 HWPX 문서를 위한 오픈소스 Python 파서**
+**한컴오피스 문서를 위한 오픈소스 Python 파서 및 변환기**
 
-`v0.1.0` 은 HWPX 문서를 파싱하는 Python 패키지입니다. 문서 내용을 `Document` 로 읽고, JSON, Markdown, 또는 일반 텍스트로 출력합니다.
+`v0.1.0`은 HWPX 문서를 구조화된 Python 문서 모델로 파싱하며 다음 형식으로 내보낼 수 있습니다:
+- JSON
+- Markdown
+- 일반 텍스트
 
-최상위 `doc.paragraphs`, `doc.tables`, `doc.images` 는 문서 본문의 최상위
-항목만 노출합니다. `doc.blocks` 는 모든 섹션에 걸쳐 평탄화된 블록 목록입니다.
-중첩 표와 이미지는 각 셀의 `cell.blocks` 안에 보존되며,
-`cell.text` 는 셀 전체 내용을 재귀적으로 평탄화한 텍스트를 제공합니다.
+**유용한 용도:**
+- 문서 수집과 검색
+- RAG 및 NLP 워크플로
+- HWPX 텍스트나 메타데이터가 필요한 백엔드 서비스
 
 ---
 
@@ -17,91 +20,115 @@
 pip install openhanji
 ```
 
-## 사용법 시작
+## 빠른 시작
 
 ```python
 import openhanji
 
-doc = openhanji.open("정부보고서.hwpx")
+doc = openhanji.open("report.hwpx")
 
-#문단 순회
+# 문단 반복
 for paragraph in doc.paragraphs:
     print(paragraph.text)
 
-#전체 블록 순회 (모든 섹션에 걸쳐 평탄화)
+# 모든 블록 반복 (섹션을 가로질러 평탄화)
 for block in doc.blocks:
     print(type(block).__name__, getattr(block, "text", ""))
 
-#구조화된 출력
-print(doc.to_json())                        #플랫 "body" 배열 (기본값)
-print(doc.to_json(mode="structured"))       #섹션별 배열
+# 구조화된 출력
+print(doc.to_json())                        # 평탄화된 "body" 배열 (기본값)
+print(doc.to_json(mode="structured"))       # 섹션별 배열
 print(doc.to_markdown())
 print(doc.to_text())
 
-#메타데이터
+# 메타데이터
 print(doc.metadata.title)
 print(doc.metadata.author)
 ```
 
 ## CLI
 
+마크다운 출력 (기본값):
+
 ```bash
-#마크다운 (기본값) - 제목과 단순 표는 Markdown, 복잡한 표는 HTML 로 보존
-openhanji extract 문서.hwpx
+openhanji extract document.hwpx
 ```
 
+재귀적 일반 텍스트 추출:
+
 ```bash
-#텍스트 - 중첩 표를 포함한 재귀적 일반 텍스트 추출
-openhanji extract 문서.hwpx --format text
+openhanji extract document.hwpx --format text
 ```
 
+런(run) 수준의 서식 메타데이터를 포함한 JSON 출력.
+
+기본값이 아닌 `bold`, `italic`, `font_size`, `color` 값이 출력에 포함됩니다.
+
 ```bash
-#json - 완전한 데이터; 기본값이 아닌 경우에만 bold/italic/font_size/color 포함
-openhanji extract 문서.hwpx --format json
+openhanji extract document.hwpx --format json
 ```
 
+단축 형식 별칭:
+
 ```bash
-#짧은 형식 별칭
-openhanji extract 문서.hwpx -f json
+openhanji extract document.hwpx -f json
 ```
 
-`header.xml` 에 값이 설정된 경우 JSON 출력에 `font_face`, 문단
-`align`, `style_name` 이 포함됩니다. 기본값 필드는 생략됩니다.
+JSON은 `header.xml`에 정의된 경우 Run의 `font_face`와 문단의 `align`, `style_name` 값을 포함합니다.
 
-```bash
-#파일로 저장
-openhanji extract 문서.hwpx -o output.md
+기본값 필드는 생략됩니다 — 단순 텍스트 Run은 다음과 같이 직렬화됩니다:
+
+```json
+{"text": "..."}
 ```
 
-```bash
-#디렉터리 모드 - 디렉터리 안의 모든 .hwpx 를 재귀적으로 찾아 출력 디렉터리에 변환
-openhanji extract ./문서들/ -o ./output/ -f markdown
-```
+출력을 파일로 저장:
 
 ```bash
-#strict 모드 - 알 수 없는 콘텐츠를 건너뛰지 않고 오류로 처리
-openhanji extract 문서.hwpx --strict
+openhanji extract document.hwpx -o output.md
 ```
 
-```bash
-#with-images - 이미지 바이너리를 읽어 base64로 포함 (기본값: 건너뜀, 플레이스홀더로 렌더링)
-openhanji extract 문서.hwpx --with-images
-```
+입력 디렉터리의 모든 `.hwpx`를 재귀적으로 변환하여 출력 디렉터리에 저장:
 
 ```bash
-#heading-detection - 제목 감지 전략 (기본값: auto)
-openhanji extract 문서.hwpx --heading-detection structural  #구조적 신호만 사용
-openhanji extract 문서.hwpx --heading-detection none        #모든 단락을 BODY로 처리
+openhanji extract ./docs/ -o ./output/ -f markdown
 ```
 
+Strict 모드는 알 수 없는 콘텐츠와 잘못된 현재 XML 파트를 건너뛰지 않고
+오류를 발생시킵니다:
+
 ```bash
-#버전 확인
+openhanji extract document.hwpx --strict
+```
+
+이미지 바이너리를 읽어 base64로 포함합니다.
+
+기본적으로 바이너리 이미지 읽기는 건너뛰며 이미지가 플레이스홀더로 렌더됩니다.
+
+```bash
+openhanji extract document.hwpx --with-images
+```
+
+헤딩 분류 전략 (`auto`, `structural`, `none`).
+
+`structural`은 구조적 헤딩 신호만 사용합니다.
+`none`은 모든 문단을 `BODY`로 처리합니다.
+
+```bash
+openhanji extract document.hwpx --heading-detection structural
+openhanji extract document.hwpx --heading-detection none
+```
+
+버전 출력:
+
+```bash
 openhanji --version
 ```
 
+문서 메타데이터와 콘텐츠 통계를 출력합니다 — 제목, 작성자, 키워드, 날짜, 페이지 수, 문단/표/이미지 개수 등을 포함합니다:
+
 ```bash
-#메타데이터 - 제목/작성자/주제/키워드/날짜/페이지/문단·표·이미지 개수 출력
-openhanji info 문서.hwpx
+openhanji info document.hwpx
 ```
 
 ---
@@ -116,7 +143,7 @@ openhanji info 문서.hwpx
 
 ## 기여하기
 
-프로젝트에 기여를 환영합니다. 이슈나 PR을 열어주세요.
+프로젝트에 기여해 주셔서 감사드립니다. 이슈나 PR을 열어 주세요.
 
 ---
 

@@ -27,7 +27,8 @@ metadata (page headers/footers, source paths).
 
 `doc.sections` is the canonical store — a list of [`Section`](#section)
 objects, one per source XML file. The parser builds one `Section` per
-`section*.xml` it walks, in numeric order.
+section file it walks, using usable `section*.xml` entries from OPF
+spine order when available and numeric filename order as the fallback.
 
 The flattened properties (`doc.paragraphs`, `doc.tables`, `doc.images`,
 `doc.headers`, `doc.footers`) iterate across **all** sections. They are

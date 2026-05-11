@@ -1,5 +1,6 @@
 """Integration tests for cv-headings-lists-equation-footer.hwpx."""
 
+import json
 import pathlib
 
 import pytest
@@ -162,7 +163,6 @@ class DescribeOutputFormats:
 
     def it_to_json_has_footers_key(self, doc):
         from openhanji.converters.json import to_json
-        import json
 
         data = json.loads(to_json(doc))
         assert "footers" in data

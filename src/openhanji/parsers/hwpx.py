@@ -7,14 +7,12 @@ import pathlib
 import re
 import xml.etree.ElementTree as ET
 import zipfile
-from datetime import datetime
 
 from openhanji.exceptions import CorruptedFileError, UnknownRecordError
 from openhanji.models.document import (
     Cell,
     Document,
     ImageRef,
-    Metadata,
     Paragraph,
     ParagraphStyle,
     Row,
@@ -23,9 +21,15 @@ from openhanji.models.document import (
     Table,
 )
 from openhanji.parsers.base import BaseParser
+from openhanji.parsers.hwpx_index import (
+    index_bindata,
+    index_header,
+    parse_metadata,
+    parse_package,
+    section_files,
+)
 from openhanji.parsers.hwpx_support import (
     _BODY_FONT_FACES,
-    _BULLET_NUM_FORMATS,
     _EQUATION_TAGS,
     _HEADING_FONT_FACES,
     _HEADING_STYLES,
@@ -38,7 +42,7 @@ from openhanji.parsers.hwpx_support import (
     HeaderIndex,
     ParaShape,
     _extract_hyperlink_url,
-    _resolve_part,
+    _parse_int,
     _strip_ns,
 )
 
@@ -52,7 +56,7 @@ class HwpxParser(BaseParser):
         try:
             with zipfile.ZipFile(path, "r") as zf:
                 names = zf.namelist()
-                metadata = self._parse_metadata(zf, names)
+                metadata = parse_metadata(zf, names, strict=self.strict)
                 sections = self._parse_body(zf, names)
                 doc = Document(metadata=metadata, sections=sections)
                 self._reindex_images(doc)
@@ -90,94 +94,19 @@ class HwpxParser(BaseParser):
 
         visit_blocks(doc.blocks)
 
-    def _parse_metadata(self, zf: zipfile.ZipFile, names: list[str]) -> Metadata:
-        """Build Metadata from header.xml and content.hpf.
-
-        header.xml is read first for title, author, and subject; content.hpf
-        fills in only what header.xml left empty. Dates, keywords, and page
-        count come from content.hpf exclusively.
-        """
-        meta = Metadata()
-
-        header = next((n for n in names if n.endswith("header.xml")), None)
-        if header:
-            try:
-                with zf.open(header) as f:
-                    header_xml = ET.parse(f).getroot()
-                for elem in header_xml.iter():
-                    tag = _strip_ns(elem.tag)
-                    text = (elem.text or "").strip()
-                    if not text:
-                        continue
-                    if tag == "title":
-                        meta.title = text
-                    elif tag in ("creator", "author"):
-                        meta.author = text
-                    elif tag == "subject":
-                        meta.subject = text
-            except ET.ParseError as exc:
-                logger.warning("Could not parse header.xml: %s", exc)
-
-        # content.hpf (OPF) holds title, author, subject, dates, and keywords.
-        hpf = next((n for n in names if n.endswith("content.hpf")), None)
-        if hpf:
-            try:
-                with zf.open(hpf) as f:
-                    hpf_xml = ET.parse(f).getroot()
-                for elem in hpf_xml.iter():
-                    tag = _strip_ns(elem.tag)
-                    text = (elem.text or "").strip()
-                    name_attr = elem.get("name", "")
-                    if tag == "title" and text and meta.title is None:
-                        meta.title = text
-                    elif tag == "meta":
-                        if name_attr == "creator" and text and meta.author is None:
-                            meta.author = text
-                        elif name_attr == "subject" and text and meta.subject is None:
-                            meta.subject = text
-                        elif name_attr == "CreatedDate" and text:
-                            try:
-                                meta.created_at = datetime.fromisoformat(
-                                    text.replace("Z", "+00:00")
-                                )
-                            except ValueError:
-                                pass
-                        elif name_attr == "ModifiedDate" and text:
-                            try:
-                                meta.modified_at = datetime.fromisoformat(
-                                    text.replace("Z", "+00:00")
-                                )
-                            except ValueError:
-                                pass
-                        elif name_attr == "keyword" and text:
-                            meta.keywords = [
-                                k.strip()
-                                for k in re.split(r"[,\r\n]+", text)
-                                if k.strip()
-                            ]
-                        elif name_attr.lower() == "pagecount" and text:
-                            try:
-                                meta.page_count = int(text)
-                            except ValueError:
-                                pass
-            except ET.ParseError as exc:
-                logger.warning("Could not parse content.hpf: %s", exc)
-
-        return meta
-
     def _parse_body(self, zf: zipfile.ZipFile, names: list[str]) -> list[Section]:
-        package = self._parse_package(zf, names)
-        bindata = self._index_bindata(zf, names)
-        header_index = self._index_header(zf, names)
+        package = parse_package(zf, names, strict=self.strict)
+        bindata = index_bindata(zf, names, with_images=self.with_images)
+        header_index = index_header(zf, names, strict=self.strict)
 
-        section_files = self._section_files(names, package)
-        if not section_files:
+        section_paths = section_files(names, package)
+        if not section_paths:
             logger.warning("No section files found in HWPX archive")
             return []
 
         sections: list[Section] = []
         body_index = 0
-        for sec_idx, section_path in enumerate(section_files):
+        for sec_idx, section_path in enumerate(section_paths):
             blocks: list[Paragraph | Table | ImageRef] = []
             headers: list[Paragraph | Table | ImageRef] = []
             footers: list[Paragraph | Table | ImageRef] = []
@@ -215,236 +144,6 @@ class HwpxParser(BaseParser):
             )
 
         return sections
-
-    def _parse_package(
-        self,
-        zf: zipfile.ZipFile,
-        names: list[str],
-    ) -> dict[str, object]:
-        content_path = next((n for n in names if n.endswith("content.hpf")), None)
-        package: dict[str, object] = {
-            "content_path": content_path,
-            "manifest": {},
-            "spine": [],
-        }
-        if not content_path:
-            return package
-
-        try:
-            with zf.open(content_path) as f:
-                package_xml = ET.parse(f).getroot()
-        except ET.ParseError as exc:
-            logger.warning("Could not parse content.hpf: %s", exc)
-            return package
-
-        manifest: dict[str, str] = {}
-        for elem in package_xml.iter():
-            if _strip_ns(elem.tag) != "item":
-                continue
-            item_id = elem.get("id")
-            href = elem.get("href")
-            if item_id and href:
-                manifest[item_id] = _resolve_part(content_path, href)
-        package["manifest"] = manifest
-
-        spine: list[str] = []
-        for elem in package_xml.iter():
-            if _strip_ns(elem.tag) != "itemref":
-                continue
-            idref = elem.get("idref")
-            if not idref:
-                continue
-            target = manifest.get(idref)
-            if not target:
-                continue
-            resolved = self._match_name(target, names)
-            if not resolved:
-                continue
-            spine.append(resolved)
-        package["spine"] = spine
-
-        return package
-
-    def _index_bindata(
-        self, zf: zipfile.ZipFile, names: list[str]
-    ) -> dict[str, tuple[bytes, str]]:
-        """Return {binaryItemIDRef: (bytes, ext)} for every BinData/ entry.
-
-        Indexes by both the full stem (e.g. 'image1') and the numeric id ('1')
-        so that both binaryItemIDRef='image1' and binaryItemIDRef='1' resolve.
-        Returns {} immediately when with_images=False — no zip reads performed.
-        """
-        if not self.with_images:
-            return {}
-        index: dict[str, tuple[bytes, str]] = {}
-        for name in names:
-            if not name.lower().startswith("bindata/"):
-                continue
-            stem = name.rsplit("/", 1)[-1]
-            ext = stem.rsplit(".", 1)[-1].lower() if "." in stem else ""
-            stem_no_ext = stem.rsplit(".", 1)[0] if "." in stem else stem
-            m = re.search(r"(\d+)", stem_no_ext)
-            try:
-                data = zf.read(name)
-            except Exception as exc:
-                logger.warning("Could not read BinData entry %s: %s", name, exc)
-                continue
-            # Index by full stem to match Hancom HWPX binaryItemIDRef values.
-            index[stem_no_ext] = (data, ext)
-            # Also index by bare numeric id for synthetic fixtures.
-            if m:
-                index[str(int(m.group(1)))] = (data, ext)
-        return index
-
-    def _index_header(self, zf: zipfile.ZipFile, names: list[str]) -> HeaderIndex:
-        index = HeaderIndex()
-        header = next((n for n in names if n.endswith("header.xml")), None)
-        if not header:
-            return index
-        try:
-            with zf.open(header) as f:
-                header_xml = ET.parse(f).getroot()
-            for elem in header_xml.iter():
-                tag = _strip_ns(elem.tag)
-                if tag == "fontface":
-                    lang = (elem.get("lang") or "").upper()
-                    if not lang:
-                        continue
-                    fonts = index.font_faces.setdefault(lang, {})
-                    for font in elem:
-                        if _strip_ns(font.tag) != "font":
-                            continue
-                        font_id = font.get("id")
-                        face = font.get("face")
-                        if font_id and face:
-                            fonts[font_id] = face
-                elif tag == "charPr":
-                    cid = elem.get("id")
-                    if cid is None:
-                        continue
-                    bold = elem.get("bold", "0") == "1"
-                    italic = elem.get("italic", "0") == "1"
-                    ul_elem = elem.find(".//{*}underline")
-                    underline = (
-                        ul_elem is not None and ul_elem.get("type", "NONE") != "NONE"
-                    )
-                    raw_h = elem.get("height")
-                    font_size: float | None = (
-                        round(int(raw_h) / 100, 1) if raw_h else None
-                    )
-                    raw_color = elem.get("textColor", "")
-                    color: str | None = (
-                        raw_color
-                        if raw_color and raw_color.upper() != "#000000"
-                        else None
-                    )
-                    font_ref = elem.find(".//{*}fontRef")
-                    font_face: str | None = None
-                    font_face_latin: str | None = None
-                    if font_ref is not None:
-                        h_ref = font_ref.get("hangul")
-                        l_ref = font_ref.get("latin")
-                        if h_ref and "HANGUL" in index.font_faces:
-                            font_face = index.font_faces["HANGUL"].get(h_ref)
-                        if l_ref and "LATIN" in index.font_faces:
-                            font_face_latin = index.font_faces["LATIN"].get(l_ref)
-                        if font_face is None:
-                            font_face = font_face_latin
-                    index.char_shapes[cid] = CharShape(
-                        bold=bold,
-                        italic=italic,
-                        underline=underline,
-                        font_size=font_size,
-                        color=color,
-                        font_face=font_face,
-                        font_face_latin=font_face_latin,
-                    )
-                elif tag == "numbering":
-                    nid = elem.get("id")
-                    if nid is None:
-                        continue
-                    # Inspect the first paraHead to determine ordered vs unordered.
-                    first_head = elem.find(".//{*}paraHead")
-                    if first_head is not None:
-                        nfmt = first_head.get("numFormat", "DIGIT")
-                        index.numbering[nid] = (
-                            "unordered" if nfmt in _BULLET_NUM_FORMATS else "ordered"
-                        )
-                elif tag == "paraPr":
-                    pid = elem.get("id")
-                    if pid is None:
-                        continue
-                    list_kind = ""
-                    for desc in elem.iter():
-                        dtag = _strip_ns(desc.tag)
-                        if dtag == "heading":
-                            htype = desc.get("type", "")
-                            hidref = desc.get("idRef", "0")
-                            if htype == "NUMBER" and hidref != "0":
-                                list_kind = index.numbering.get(hidref, "ordered")
-                            break
-                        if dtag in ("autoNumFormat", "numPr"):
-                            list_kind = "ordered"
-                            break
-                        if dtag in ("bullet", "bulletPr"):
-                            list_kind = "unordered"
-                            break
-                    align = ""
-                    align_elem = elem.find(".//{*}align")
-                    if align_elem is not None:
-                        align = align_elem.get("horizontal", "")
-                    # Prefer hh:heading(type="OUTLINE"), then fall back to
-                    # the paraPr outlineLevel attribute.
-                    outline_level = elem.get("outlineLevel", "")
-                    heading_child = elem.find(".//{*}heading")
-                    if heading_child is not None:
-                        if heading_child.get("type") == "OUTLINE":
-                            child_level = heading_child.get("level", "0")
-                            if child_level and child_level != "0":
-                                outline_level = child_level
-                    index.para_shapes[pid] = ParaShape(
-                        outline_level=outline_level,
-                        list_kind=list_kind,
-                        align=align,
-                    )
-                elif tag == "style":
-                    sid = elem.get("id")
-                    if sid is None:
-                        continue
-                    name = (
-                        elem.get("name")
-                        or elem.get("engName")
-                        or elem.get("localName")
-                        or ""
-                    ).strip()
-                    if name:
-                        index.styles[sid] = name
-        except ET.ParseError as exc:
-            logger.warning("Could not index header.xml: %s", exc)
-        return index
-
-    def _section_files(
-        self,
-        names: list[str],
-        package: dict[str, object],
-    ) -> list[str]:
-        spine = package.get("spine")
-        if isinstance(spine, list) and spine:
-            return [name for name in spine if isinstance(name, str)]
-        return sorted(
-            [n for n in names if re.search(r"section\d*\.xml$", n, re.IGNORECASE)],
-            key=self._section_order,
-        )
-
-    def _match_name(self, name: str, names: list[str]) -> str | None:
-        if name in names:
-            return name
-        lower_names = {entry.lower(): entry for entry in names}
-        return lower_names.get(name.lower())
-
-    def _section_order(self, name: str) -> int:
-        m = re.search(r"section(\d+)", name, re.IGNORECASE)
-        return int(m.group(1)) if m else 999
 
     def _walk(
         self,
@@ -493,6 +192,11 @@ class HwpxParser(BaseParser):
                     raise UnknownRecordError(
                         f"Unrecognised block element <{tag}> inside <{parent}>"
                     )
+                logger.warning(
+                    "Unrecognised block element <%s> inside <%s>; descending",
+                    tag,
+                    _strip_ns(elem.tag),
+                )
                 index = self._walk(
                     child, body, index, bindata, header_index, headers, footers
                 )
@@ -765,7 +469,13 @@ class HwpxParser(BaseParser):
             pref = p.get("paraPrIDRef") or p.get("paraPrIdRef")
             if pref:
                 outline = header_index.para_shapes.get(pref, ParaShape()).outline_level
-        return int(outline or "0")
+        return _parse_int(
+            outline,
+            default=0,
+            field="paragraph outlineLevel",
+            strict=self.strict,
+            logger=logger,
+        )
 
     def _paragraph_align(
         self, p: ET.Element, header_index: HeaderIndex | None = None
@@ -902,6 +612,7 @@ class HwpxParser(BaseParser):
         header_index: HeaderIndex | None = None,
     ) -> Table | None:
         rows: list[Row] = []
+        caption = self._table_caption(tbl, header_index)
 
         for tr in tbl:
             if _strip_ns(tr.tag) != "tr":
@@ -915,8 +626,20 @@ class HwpxParser(BaseParser):
                 row_span = 1
                 for child in tc:
                     if _strip_ns(child.tag) == "cellSpan":
-                        col_span = int(child.get("colSpan", "1") or "1")
-                        row_span = int(child.get("rowSpan", "1") or "1")
+                        col_span = _parse_int(
+                            child.get("colSpan"),
+                            default=1,
+                            field="table cell colSpan",
+                            strict=self.strict,
+                            logger=logger,
+                        )
+                        row_span = _parse_int(
+                            child.get("rowSpan"),
+                            default=1,
+                            field="table cell rowSpan",
+                            strict=self.strict,
+                            logger=logger,
+                        )
                         break
                 blocks = self._parse_cell_blocks(tc, bindata, header_index)
                 cells.append(
@@ -932,7 +655,22 @@ class HwpxParser(BaseParser):
         if not rows:
             return None
 
-        return Table(rows=rows, index=index)
+        return Table(rows=rows, caption=caption, index=index)
+
+    def _table_caption(
+        self, tbl: ET.Element, header_index: HeaderIndex | None = None
+    ) -> str | None:
+        attr_caption = (tbl.get("caption") or tbl.get("title") or "").strip()
+        if attr_caption:
+            return attr_caption
+        char_shapes = header_index.char_shapes if header_index else None
+        for child in tbl:
+            if _strip_ns(child.tag) != "caption":
+                continue
+            text = self._extract_control_text(child, char_shapes).strip()
+            if text:
+                return text
+        return None
 
     def _parse_cell_blocks(
         self,

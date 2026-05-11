@@ -6,6 +6,8 @@ import json
 import pathlib
 import zipfile
 
+MINIMAL_HEADER = '<hh:head xmlns:hh="http://www.hancom.co.kr/hwpml/2011/head"/>'
+
 
 def sec(body: str) -> str:
     """Wrap body XML in a minimal hs:sec element with all required namespaces."""
@@ -21,7 +23,7 @@ def make_hwpx(
     tmp_path: pathlib.Path,
     name: str,
     section_xml: str,
-    header_xml: str = "<hh:head/>",
+    header_xml: str = MINIMAL_HEADER,
 ) -> pathlib.Path:
     """Build a minimal HWPX zip with the given section XML and return its path."""
     path = tmp_path / name

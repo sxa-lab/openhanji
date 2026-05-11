@@ -98,14 +98,14 @@ to `\|`. Short rows are padded with empty cells to the header width.
 If **any** cell fails: fall back to HTML `<table>`. The HTML path
 preserves `colspan` / `rowspan`, uses `<th>` for the first row and
 `<td>` for the rest, nested tables (recursively), inline images, and
-full run-level formatting (including `<u>` for underline).
+run-level formatting such as underline.
 
-This split is deliberate. GFM is preferable when it works — it's
-human-readable and round-trippable through most Markdown tooling. But
-GFM can't represent cell spans, multi-paragraph cells, or nested
-tables, and silently truncating to the GFM-expressible subset would
-lose information. The HTML fallback keeps the conversion lossless at
-the cost of readability.
+This split is deliberate. GFM is preferable when it works because it is
+easy to read and supported by most Markdown tooling. But GFM cannot
+represent cell spans, multi-paragraph cells, or nested tables, and
+silently truncating to the GFM-expressible subset would lose
+information. The HTML fallback preserves more table structure at the
+cost of readability.
 
 ### Image rendering
 

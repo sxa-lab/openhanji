@@ -16,8 +16,11 @@ What the v0.1.0 HWPX parser extracts and preserves:
 
 ### Structure
 
-- Section ordering across `section0.xml`, `section1.xml`, …
-  (numeric, not lexicographic).
+- Section ordering follows the OPF spine from `content.hpf` when
+  present. Spine hrefs may be package-relative or zip-root-style; only
+  `section*.xml` spine entries are walked. If the package has no usable
+  section spine, section files fall back to numeric filename order
+  (`section0.xml`, `section1.xml`, …), not lexicographic order.
 - Paragraphs, with style resolved from `header.xml`'s style table.
 - Heading levels 1–6 mapped to `ParagraphStyle.HEADING1`…`HEADING6`.
   Two detection paths run in order: (1) structural — `outlineLevel`
@@ -115,12 +118,15 @@ heading/table pairs.
   documented publicly and is not MathML or LaTeX. There is no spec to
   parse it against, so extracting it would mean either shipping a
   reverse-engineered formula parser or outputting raw opaque bytes —
-  neither is useful for a text/RAG pipeline. The parser emits `[수식]`
+  neither is useful for text extraction. The parser emits `[수식]`
   at the equation's position to preserve the structural anchor.
 
 Unknown XML elements outside these cases are skipped and logged at
 `WARNING`. Use `strict=True` to escalate them to
-[`UnknownRecordError`](api/exceptions.md#unknownrecorderror).
+[`UnknownRecordError`](api/exceptions.md#unknownrecorderror). Malformed
+present XML parts such as `header.xml`, `content.hpf`, or section XML
+raise [`CorruptedFileError`](api/exceptions.md#corruptedfileerror) in
+strict mode; missing optional metadata/header parts are still allowed.
 
 ## Output format coverage
 
@@ -136,7 +142,7 @@ serialises as `{"text": "..."}` only.
 Image binaries are base64-encoded inline when `with_images=True` is
 passed to `openhanji.open()`. The default (`with_images=False`) skips
 all binary reads from the zip — `ImageRef` nodes are still present at
-their correct positions but emit `"data": null`.
+their correct positions but emit `"data": null` and `"format": null`.
 
 Headers and footers are included as top-level `"headers"` and `"footers"`
 arrays when non-empty. Each entry is a serialised block — paragraph,

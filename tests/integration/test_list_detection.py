@@ -17,7 +17,13 @@ import pathlib
 
 import openhanji
 from openhanji.models.document import Paragraph, ParagraphStyle
-from tests.integration.builders import assert_block_indices_sequential, make_hwpx, sec as _sec_wrap
+from tests.integration.builders import (
+    assert_block_indices_sequential,
+    make_hwpx,
+)
+from tests.integration.builders import (
+    sec as _sec_wrap,
+)
 
 # ---------------------------------------------------------------------------
 # Minimal HWPX builder helpers

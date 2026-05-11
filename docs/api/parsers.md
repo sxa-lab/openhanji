@@ -115,9 +115,16 @@ The v0.2 plan for `.hwp` binary support follows exactly this shape.
 ::: openhanji.parsers.hwpx.HwpxParser
 
 The HWPX implementation. Opens the HWPX as a zip, indexes
-`header.xml`, then walks every `section*.xml` in numeric order
-(`section0.xml`, `section1.xml`, …, **not** lexicographic, so
-`section10.xml` correctly comes after `section9.xml`).
+`header.xml`, then walks sections in the OPF spine order declared by
+`content.hpf`. Spine hrefs are resolved against both the zip root and
+the `content.hpf` directory because Hancom-saved files appear in both
+forms; non-section spine entries such as `header.xml` are ignored. If
+the package has no usable section spine, it falls back to numeric
+filename order (`section0.xml`, `section1.xml`, …, **not**
+lexicographic, so `section10.xml` correctly comes after `section9.xml`).
+Package/header indexing lives in the internal `openhanji.parsers.hwpx_index`
+module; document XML walking and block construction stay in
+`openhanji.parsers.hwpx`.
 
 ### Pipeline
 
@@ -125,7 +132,7 @@ The HWPX implementation. Opens the HWPX as a zip, indexes
    if the file is not a valid zip.
 2. **Read `header.xml`** for title, creator/author, and subject —
    Dublin Core fields, matched by local element name after namespace
-   stripping. Also builds the [`HeaderIndex`](#headerindex): font face
+   stripping. Also builds the `HeaderIndex`: font face
    table, char shapes table, para shapes table, styles table.
    `header.xml` is read first because it is more reliably populated in
    Hancom-saved files than `content.hpf`, even though the OWPML model
@@ -136,8 +143,9 @@ The HWPX implementation. Opens the HWPX as a zip, indexes
    dates, and keywords (split on commas and newlines). Title, author,
    and subject from `content.hpf` fill in only if `header.xml` left
    those fields empty — `header.xml` wins when both have a value.
-4. **Walk sections** in numeric order. For each `<hp:p>`, build a
-   `Paragraph`, group consecutive `<hp:t>` nodes into `Run` objects
+4. **Walk sections** in OPF spine order, or numeric filename order when
+   no usable section spine exists. For each `<hp:p>`, build a `Paragraph`,
+   group consecutive `<hp:t>` nodes into `Run` objects
    keyed by `charPrIDRef`, attach character formatting from the
    `charPr` index, and resolve paragraph style/alignment from the
    `paraPr` and styles indices. Paragraph style detection runs four
@@ -186,8 +194,8 @@ ctrl content — `fieldBegin`, `fieldEnd`, `colPr`, `pageNum` — is in
 
 When `self.strict` is `True`, unrecognised top-level elements raise
 [`UnknownRecordError`](exceptions.md#unknownrecorderror) instead of
-being skipped with a `WARNING` log. Malformed XML, missing required
-parts, and zip-level errors raise
-[`CorruptedFileError`](exceptions.md#corruptedfileerror) regardless of
-the strict flag.
-
+being skipped with a `WARNING` log. Malformed present XML parts
+(`header.xml`, `content.hpf`, or section XML) raise
+[`CorruptedFileError`](exceptions.md#corruptedfileerror). Missing optional
+metadata/header parts remain allowed. Zip-level errors raise
+[`CorruptedFileError`](exceptions.md#corruptedfileerror) in both modes.

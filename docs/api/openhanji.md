@@ -83,23 +83,23 @@ An invalid value raises `ValueError` immediately, before the file is opened.
 
 ### When to use `strict=True`
 
-Default behaviour (`strict=False`) is **never crash on unknown
-content** — unknown XML elements are skipped and logged at `WARNING`.
-This is the right mode for ingestion pipelines processing arbitrary
-HWPX files, where one weird document shouldn't kill the
-batch.
+Default behaviour (`strict=False`) is tolerant: unknown XML elements
+are skipped and logged at `WARNING`. This is the right mode for batch
+ingestion across arbitrary HWPX files, where one unusual document
+should not stop the whole run.
 
-Use `strict=True` when you need fail-loud guarantees:
+Use `strict=True` when unsupported content should fail the parse:
 
 - Test suites validating known-good documents.
-- Verification pipelines where unrecognised content indicates a bug.
-- Round-trip tests that need to assert lossless coverage.
+- Validation jobs where unrecognised content indicates a bug.
+- Tests that need to catch unsupported content immediately.
 
 In strict mode, unknown XML raises
-[`UnknownRecordError`](exceptions.md#unknownrecorderror) and malformed
-XML sections raise
-[`CorruptedFileError`](exceptions.md#corruptedfileerror). Both inherit
-from [`OpenHanjiError`](exceptions.md#openhanjierror), so a single
+[`UnknownRecordError`](exceptions.md#unknownrecorderror). Malformed
+present XML parts (`header.xml`, `content.hpf`, or section XML) raise
+[`CorruptedFileError`](exceptions.md#corruptedfileerror). Missing optional
+metadata/header parts are still allowed. Both parser errors inherit from
+[`OpenHanjiError`](exceptions.md#openhanjierror), so a single
 `except OpenHanjiError:` catches every parser-level failure.
 
 ### Exception hierarchy
@@ -108,7 +108,7 @@ from [`OpenHanjiError`](exceptions.md#openhanjierror), so a single
 FileNotFoundError                # path doesn't exist (stdlib)
 OpenHanjiError                   # base for everything below
 ├── NotSupportedError            # unsupported extension (e.g. .hwp in v0.1)
-├── CorruptedFileError           # malformed zip / malformed XML section
+├── CorruptedFileError           # malformed zip / malformed present XML part
 └── UnknownRecordError           # strict mode: unrecognised XML element
 ```
 

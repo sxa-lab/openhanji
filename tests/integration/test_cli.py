@@ -36,7 +36,9 @@ class TestExtractMarkdown:
 
     def test_explicit_markdown_flag(self, runner):
         with runner.isolated_filesystem():
-            result = runner.invoke(main, ["extract", str(BASIC), "--format", "markdown"])
+            result = runner.invoke(
+                main, ["extract", str(BASIC), "--format", "markdown"]
+            )
             assert result.exit_code == 0
             md_files = list(pathlib.Path(".").glob("*.md"))
             assert len(md_files) == 1
