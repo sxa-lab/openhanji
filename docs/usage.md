@@ -31,7 +31,7 @@ unsupported extensions, including `.hwp`.
 
 ```python
 doc = openhanji.open("document.hwpx", strict=True)
-# raises on unknown XML instead of skipping
+# raises on unknown XML or malformed present XML parts instead of skipping
 
 doc = openhanji.open("document.hwpx", heading_detection="structural")
 # "auto" (default) | "structural" | "none"
@@ -146,7 +146,7 @@ print(doc.to_text())                    # plain text, no formatting
 
 | Format     | Best for                                 | Note                                             |
 | ---------- | ---------------------------------------- | ------------------------------------------------ |
-| `json`     | RAG ingestion, full-fidelity metadata    | Images `null` by default; use `with_images=True` |
+| `json`     | Structured metadata and document blocks  | Images `null` by default; use `with_images=True` |
 | `markdown` | LLM context, human-readable rendering    | Underline HTML-only; complex tables fall back to `<table>`  |
 | `text`     | Plain-text chunking, search indexing     | Drops all formatting                             |
 

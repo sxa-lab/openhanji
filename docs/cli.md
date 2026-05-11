@@ -18,8 +18,10 @@ openhanji extract PATH [--format {markdown,json,text}] [--out PATH] [--strict] [
 ```
 
 `PATH` is **a single Hancom Office file** (`.hwpx`) or **a directory**.
-Directory mode walks `PATH` recursively for all supported extensions
-(`.hwpx`, `.hwp`, `.cell`, `.show`) and writes one output file per input.
+Directory mode walks `PATH` recursively for recognised Hancom extensions
+(`.hwpx`, `.hwp`, `.cell`, `.show`). In v0.1.0, only `.hwpx` is parsed;
+`.hwp`, `.cell`, and `.show` inputs are reported as skipped until their
+parsers are implemented.
 
 ### Options
 
@@ -27,10 +29,10 @@ Directory mode walks `PATH` recursively for all supported extensions
 | ---------------------- | --------------------- | --------------------------------------------------------------------------------- |
 | `--format`, `-f`       | `markdown`            | One of `markdown`, `json`, `text`. Case-insensitive.                              |
 | `--out`, `-o`          | CWD / `./extracted/`  | Output file or directory. Single-file default: write to CWD. Directory-mode default: `./extracted/` in CWD. |
-| `--strict`             | off                   | Raise on unrecognised document elements instead of skipping them.                 |
+| `--strict`             | off                   | Raise on unrecognised document elements and malformed present XML parts instead of skipping or warning. |
 | `--with-images`        | off                   | Read and embed image binaries. Without this flag images are placeholders and no binary reads are performed. Image binaries are not included in text output. |
 | `--heading-detection`  | `auto`                | Heading classification strategy: `auto` (structural signals + font heuristic), `structural` (outline level / style name only), `none` (all paragraphs forced to `BODY`). |
-| `--types`              | all                   | Comma-separated extensions to process in directory mode (e.g. `hwpx,hwp`). Defaults to all supported extensions. Exits with an error if an unknown extension is supplied. |
+| `--types`              | all                   | Comma-separated extensions to process in directory mode (e.g. `hwpx,hwp`). Defaults to all recognised Hancom extensions. Exits with an error if an unknown extension is supplied. Unsupported recognised formats are skipped. |
 | `--verbose`, `-v`      | off                   | Print per-file `[ok]` / `[skip]` / `[error]` progress lines in directory mode instead of the tqdm bar.   |
 
 ### Format choice
@@ -53,7 +55,7 @@ openhanji extract document.hwpx -f json -o document.json
 # single file — place inside an existing directory
 openhanji extract document.hwpx --out ./output/
 
-# strict mode — unknown content raises CorruptedFileError / UnknownRecordError
+# strict mode — unknown content and malformed present XML parts raise
 openhanji extract document.hwpx --strict
 
 # include image binaries (base64-inlined; placeholders by default)
@@ -72,7 +74,7 @@ openhanji extract ./docs/
 # batch — explicit output directory
 openhanji extract ./docs/ --out ./out/ -f markdown
 
-# batch — filter to specific extensions
+# batch — filter to specific extensions; hwp is recognised but skipped in v0.1.0
 openhanji extract ./docs/ --out ./out/ --types hwpx,hwp
 
 # batch — per-file progress lines instead of tqdm bar
@@ -87,8 +89,10 @@ the file is written to CWD.
 
 **Directory mode** — output root is `--out` when given, otherwise
 `./extracted/` in CWD. When the input directory contains more than one
-file type, output is organised into per-type subfolders (`hwpx/`,
-`cell/`, `show/`). Same-type batches are written flat.
+recognised file type, successful outputs are organised into per-type
+subfolders (`hwpx/`, `hwp/`, `cell/`, `show/`). Same-type batches are written
+flat. Unsupported recognised formats produce `[skip]` entries and no
+output file.
 
 **Output filenames** are `stem_ext.fmt` — e.g. `document.hwpx` becomes
 `document_hwpx.md`. If that name already exists, a counter is appended:

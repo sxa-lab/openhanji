@@ -71,11 +71,14 @@ Raised by parsers when the file is structurally broken:
 - The HWPX file is not a valid zip — raised in both modes.
 - A section XML part is not well-formed — raised in strict mode only;
   in non-strict mode the malformed section is logged and skipped.
+- A present metadata/header package part (`header.xml` or `content.hpf`)
+  is not well-formed — raised in strict mode only; in non-strict mode
+  it is logged and ignored where possible.
 - Any other unexpected exception during parse is wrapped and
   re-raised as `CorruptedFileError` — raised in both modes.
 
-Missing optional parts (`content.hpf`, `header.xml`) are logged as
-warnings and do not raise.
+Missing optional parts (`content.hpf`, `header.xml`) do not raise,
+even in strict mode.
 
 ---
 
@@ -87,8 +90,8 @@ Raised by parsers in **strict mode only** when a block-level XML
 element appears inside a section that the parser has no handler for
 and isn't in the `_SKIP_TAGS` allowlist.
 
-In default (non-strict) mode, the same element is silently skipped
-and parsing continues. This is what makes the default mode robust
+In default (non-strict) mode, the same element is skipped with a
+warning and parsing continues. This is what makes the default mode robust
 against HWPX files that contain undocumented or version-specific
 block types.
 

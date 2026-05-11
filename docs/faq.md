@@ -2,34 +2,23 @@
 
 ## 1. Who is this for?
 
-`openhanji` is for any Python developer or team that needs to read
-`.hwpx` files — no Hancom Office installed, no conversion to PDF or
-DOCX required.
+`openhanji` is for Python code that needs to read `.hwpx` files without
+Hancom Office or a PDF/DOCX conversion step.
 
 Typical users:
 
-- **AI / LLM engineers** building RAG pipelines that need to ingest
-  legal filings, academic papers, business reports, or any document
-  authored in Hancom Office. `to_text()` gives you clean plain text
-  for chunking; `openhanji.converters.json.to_json()` gives you the
-  full structured tree for metadata-aware retrieval.
+- **RAG and NLP projects** that need text from legal filings, academic
+  papers, business reports, or other Hancom Office documents. `to_text()`
+  gives plain text for chunking; `openhanji.converters.json.to_json()`
+  gives structured data for metadata-aware retrieval.
 - **NLP researchers** working with documents in which a significant
   share of the source material is in HWPX format.
-- **Data engineers** building document ingestion pipelines for
-  organisations that use Hancom Office as their primary office suite —
-  common in public sector, education, legal, and enterprise environments.
-  The CLI is designed for non-interactive batch use: a single command
-  processes an entire directory, per-file errors are logged but never
-  halt the run, and the exit code summarises the full batch so cron jobs
-  and CI pipelines can act on it reliably.
+- **Data engineers** processing document collections from organisations
+  that use Hancom Office. The CLI handles directory batches and reports
+  per-file success, skip, and error counts.
 - **Backend developers** adding HWPX export or preview support to a
   web application or document management system.
-- **AI agents and autonomous pipelines** that need to read, extract, or
-  reason over HWPX documents as part of a tool call or workflow step.
-  `openhanji` has no interactive dependencies — no GUI, no Office
-  installation, no subprocess calls to external tools.
-- **Open-source contributors** who want a well-typed, well-tested
-  foundation to build higher-level HWPX tooling on top of.
+- **Open-source contributors** building HWPX tooling.
 
 `openhanji` is pure Python, Apache 2.0.
 
@@ -39,7 +28,7 @@ Typical users:
 
 Not yet. `.hwp` is Hancom's older binary format (pre-2010) and requires
 a completely different parser. It is planned for v0.2. `.hwpx` is the
-current OOXML-style ZIP + XML format and is fully supported from v0.1.0.
+current OOXML-style ZIP + XML format and is supported from v0.1.0.
 
 ---
 
@@ -58,23 +47,21 @@ the XML metadata unless explicitly set. This is observed behavior
 across many HWPX files, not a formally documented guarantee.
 
 `metadata.created_at`, `metadata.modified_at`, and `metadata.keywords`
-come from `content.hpf` OPF metadata and are reliably present. Use
-those for document identification in pipelines.
+come from `content.hpf` OPF metadata when present.
 
 ---
 
 ## 4. Why are images placeholders by default?
 
 Reading image binaries from the HWPX zip means decompressing every
-`BinData/` entry — potentially dozens of zip reads per document. For
-batch ingestion pipelines that don't need the actual pixels (most RAG
-and NLP use cases), this is wasted work that balloons output size by
-5–10×.
+`BinData/` entry. For text extraction, that work is usually unnecessary
+and can make Markdown/JSON output much larger.
 
 The default (`with_images=False`) skips all binary reads. `ImageRef`
 nodes are still present in the document tree at their correct positions,
-with caption, dimensions, and format preserved. Pass `with_images=True`
-to attach the actual bytes:
+with caption and dimensions preserved. `format` remains `None` because
+the binary part is not read. Pass `with_images=True` to attach the actual
+bytes and format:
 
 ```python
 doc = openhanji.open("document.hwpx", with_images=True)
@@ -107,7 +94,7 @@ to plain text. Use it for RAG chunking where structure is not needed.
 
 ## 6. What is the difference between `to_markdown()` and `to_text()` for RAG?
 
-Use `to_text()` when you want the cleanest possible input for a text
+Use `to_text()` when you want plain input for a text
 splitter or embedding model. It strips all Markdown syntax, flattens
 tables to tab-separated rows, and drops image data entirely. No `#`,
 no `**`, no `|` — just text.
@@ -116,9 +103,8 @@ Use `to_markdown()` when structure matters — heading hierarchy, table
 layout, bold emphasis. GFM renders well in most LLM context windows
 and gives the model more to work with than a flat text dump.
 
-Use `openhanji.converters.json.to_json()` when you need the full
-fidelity tree — run-level
-formatting, paragraph styles, image positions, metadata — for
+Use `openhanji.converters.json.to_json()` when you need structured data:
+run-level formatting, paragraph styles, image positions, and metadata for
 structured retrieval, reranking, or custom rendering.
 
 ---
@@ -129,7 +115,7 @@ This reflects the order elements appear in the source XML, not a parser
 bug. Hancom Office can write a section heading `<hp:p>` after the table
 it introduces in the XML stream. The parser preserves source order.
 
-If your pipeline needs heading-before-content order, walk `doc.blocks` and
+If your code needs heading-before-content order, walk `doc.blocks` and
 reorder heading/table pairs:
 
 ```python
@@ -174,7 +160,7 @@ def load_hwpx(path: str) -> list[str]:
 
 ## 9. Is `openhanji` affiliated with Hancom Inc.?
 
-No. `openhanji` is an independent open-source project developed by **SxA Lab**. "HWP" and
-"HWPX" are file formats developed by Hancom Inc. This project
-interoperates with those formats but is not endorsed by, affiliated
-with, or supported by Hancom Inc.
+No. `openhanji` is an independent open-source project developed by
+**SxA Lab**. "HWP" and "HWPX" are file formats developed by Hancom Inc.
+This project interoperates with those formats but is not endorsed by,
+affiliated with, or supported by Hancom Inc.

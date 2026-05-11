@@ -1,14 +1,16 @@
-[한국어](README.md) | [English](README.en.md) | [中文](README.zh.md) | [License](LICENSE) | [Notice](NOTICE)
+[한국어](https://github.com/sxa-lab/openhanji/blob/main/README.md) | [English](https://github.com/sxa-lab/openhanji/blob/main/README.en.md) | [中文](https://github.com/sxa-lab/openhanji/blob/main/README.zh.md) | [License](https://github.com/sxa-lab/openhanji/blob/main/LICENSE) | [Notice](https://github.com/sxa-lab/openhanji/blob/main/NOTICE)
 
-**Open-source Python parser for Hancom Office HWPX documents**
+**Open-source Python parser and converter for Hancom Office documents**
 
-`v0.1.0` is a Python package for parsing HWPX documents. It reads a document into a `Document` object and renders JSON, Markdown, or plain text output.
+`v0.1.0` parses HWPX documents into a structured Python document model that can be exported as:
+- JSON
+- Markdown
+- plain text
 
-Top-level `doc.paragraphs`, `doc.tables`, and `doc.images` expose only
-top-level body items. `doc.blocks` is the flat ordered list of all blocks
-across all sections. Nested tables and images remain attached to their owning
-cells through `cell.blocks`, while `cell.text` provides a recursive plain-text
-summary of the full cell content.
+**Useful for:**
+- document ingestion and search
+- RAG and NLP workflows
+- backend services that need HWPX text or metadata
 
 ---
 
@@ -25,85 +27,107 @@ import openhanji
 
 doc = openhanji.open("report.hwpx")
 
-#iterate paragraphs
+# Iterate paragraphs
 for paragraph in doc.paragraphs:
     print(paragraph.text)
 
-#iterate all blocks (flattened across sections)
+# Iterate all blocks (flattened across sections)
 for block in doc.blocks:
     print(type(block).__name__, getattr(block, "text", ""))
 
-#structured output
-print(doc.to_json())                        #flat "body" array (default)
-print(doc.to_json(mode="structured"))       #section-aware array
+# Structured output
+print(doc.to_json())                        # flat "body" array (default)
+print(doc.to_json(mode="structured"))       # section-aware array
 print(doc.to_markdown())
 print(doc.to_text())
 
-#metadata
+# Metadata
 print(doc.metadata.title)
 print(doc.metadata.author)
 ```
 
 ## CLI
 
+Markdown output (default):
+
 ```bash
-#markdown (default) - headings and simple tables use Markdown; complex tables fall back to HTML
 openhanji extract document.hwpx
 ```
 
+Recursive plain-text extraction:
+
 ```bash
-#text - recursive plain-text extraction, including nested table content
 openhanji extract document.hwpx --format text
 ```
 
+JSON output with run-level formatting metadata.
+
+Non-default `bold`, `italic`, `font_size`, and `color` values are included in the output.
+
 ```bash
-#json - full fidelity; run-level bold/italic/font_size/color included when non-default
 openhanji extract document.hwpx --format json
 ```
 
+Short format alias:
+
 ```bash
-#short format alias
 openhanji extract document.hwpx -f json
 ```
 
-Run JSON includes resolved `font_face`, `align`, and `style_name` when
-the values are set in `header.xml`. Fields at their default values are
-omitted — a plain run serialises as `{"text": "..."}` only.
+JSON includes resolved `font_face` on runs, plus paragraph `align` and `style_name` values when defined in `header.xml`.
+
+Fields at default values are omitted — a plain run serialises as:
+
+```json
+{"text": "..."}
+```
+
+Save output to a file:
 
 ```bash
-#save to file
 openhanji extract document.hwpx -o output.md
 ```
 
+Recursively convert every `.hwpx` under the input directory into the output directory:
+
 ```bash
-#directory mode - recursively converts every .hwpx under the input directory into the output directory
 openhanji extract ./docs/ -o ./output/ -f markdown
 ```
 
+Strict mode raises on unknown content and malformed present XML parts
+instead of skipping them:
+
 ```bash
-#strict mode - raise on unknown content instead of skipping it
 openhanji extract document.hwpx --strict
 ```
 
+Read and embed image binaries as base64.
+
+By default, binary image reads are skipped and images render as placeholders.
+
 ```bash
-#with-images - read and embed image binaries (base64-inlined)
-#default skips binary reads; images render as placeholders
 openhanji extract document.hwpx --with-images
 ```
 
-```bash
-#heading-detection - heading classification strategy (default: auto)
-openhanji extract document.hwpx --heading-detection structural  #structural signals only
-openhanji extract document.hwpx --heading-detection none        #all paragraphs are BODY
-```
+Heading classification strategy (`auto`, `structural`, `none`).
+
+`structural` uses only structural heading signals.
+`none` treats all paragraphs as `BODY`.
 
 ```bash
-#print version
+openhanji extract document.hwpx --heading-detection structural
+openhanji extract document.hwpx --heading-detection none
+```
+
+Print version:
+
+```bash
 openhanji --version
 ```
 
+Print document metadata and content statistics, including title, author, keywords, dates, page count, and paragraph/table/image counts:
+
 ```bash
-#metadata - prints title, author, subject, keywords, dates, page count, and paragraph/table/image counts
 openhanji info document.hwpx
 ```
 

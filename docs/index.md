@@ -3,21 +3,20 @@
 **Open-source Python parser for Hancom Office HWPX documents.**
 
 `openhanji` reads `.hwpx` files into a typed `Document` object and emits
-JSON, Markdown, or plain text. Built for AI / NLP / RAG pipelines that
-need to consume HWPX files without depending on Hancom's proprietary
-stack.
+JSON, Markdown, or plain text. It is useful when Python systems need to
+consume HWPX files without depending on Hancom's proprietary stack.
 
 ## Highlights
 
 - **HWPX-native.** Parses the OWPML XML inside the HWPX zip directly; no
-  conversion to PDF or DOCX in the pipeline.
+  PDF or DOCX conversion step.
 - **Typed document model.** `Document`, `Paragraph`, `Run`, `Table`, `Cell`,
   `ImageRef`, `Metadata` — plain dataclasses, fully type-checked under
   `mypy --strict`.
 - **Three output formats.** `openhanji.converters.json.to_json()`
-  (full fidelity), `to_markdown()` (GFM + HTML fallback for complex
+  (structured data), `to_markdown()` (GFM + HTML fallback for complex
   tables), `to_text()` (recursive plain-text extraction).
-- **Never crashes on unknown content.** Unknown XML is skipped and
+- **Tolerant by default.** Unknown XML is skipped and
   logged at `WARNING`. Pass `strict=True` to escalate to exceptions.
 - **Format-native.** Hangul font faces are resolved from `header.xml` and
   preserved in the run-level output. Heading detection handles both
