@@ -70,7 +70,6 @@ only-include = [
     "README.md",
     "README.en.md",
     "README.zh.md",
-    "_config.yml",
     "mkdocs.yml",
     "pyproject.toml",
 ]
