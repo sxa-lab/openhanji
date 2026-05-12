@@ -51,7 +51,7 @@ openhanji = "openhanji.cli:main"
 Homepage = "https://github.com/sxa-lab/openhanji"
 Repository = "https://github.com/sxa-lab/openhanji"
 Issues = "https://github.com/sxa-lab/openhanji/issues"
-Documentation = "https://github.com/sxa-lab/openhanji/tree/main/docs"
+Documentation = "https://openhanji.readthedocs.io/"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/openhanji"]

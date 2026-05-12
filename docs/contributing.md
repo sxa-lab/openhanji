@@ -50,8 +50,7 @@ pip install -r docs/requirements.txt
 mkdocs serve
 ```
 
-Read the Docs configuration lives in `.readthedocs.yaml`; once the
-project is connected there, builds run from that file on pushes and PRs.
+Read the Docs builds from `.readthedocs.yaml` on pushes and PRs.
 
 ### Editing the API reference
 
