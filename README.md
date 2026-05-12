@@ -1,5 +1,10 @@
 [한국어](https://github.com/sxa-lab/openhanji/blob/main/README.md) | [English](https://github.com/sxa-lab/openhanji/blob/main/README.en.md) | [中文](https://github.com/sxa-lab/openhanji/blob/main/README.zh.md) | [라이선스](https://github.com/sxa-lab/openhanji/blob/main/LICENSE) | [고지사항](https://github.com/sxa-lab/openhanji/blob/main/NOTICE)
 
+[![PyPI version](https://badge.fury.io/py/openhanji.svg)](https://badge.fury.io/py/openhanji)
+[![Python Version](https://img.shields.io/pypi/pyversions/openhanji.svg)](https://pypi.org/project/openhanji/)
+[![Tests](https://github.com/sxa-lab/openhanji/actions/workflows/ci.yml/badge.svg)](https://github.com/sxa-lab/openhanji/actions/workflows/ci.yml)
+[![ReadTheDocs](https://img.shields.io/readthedocs/openhanji?label=ReadTheDocs)](https://openhanji.readthedocs.io/)
+
 **한컴오피스 문서를 위한 오픈소스 Python 파서 및 변환기**
 
 `v0.1.0`은 HWPX 문서를 구조화된 Python 문서 모델로 파싱하며 다음 형식으로 내보낼 수 있습니다:

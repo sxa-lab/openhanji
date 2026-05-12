@@ -1,5 +1,10 @@
 [한국어](https://github.com/sxa-lab/openhanji/blob/main/README.md) | [English](https://github.com/sxa-lab/openhanji/blob/main/README.en.md) | [中文](https://github.com/sxa-lab/openhanji/blob/main/README.zh.md) | [License](https://github.com/sxa-lab/openhanji/blob/main/LICENSE) | [Notice](https://github.com/sxa-lab/openhanji/blob/main/NOTICE)
 
+[![PyPI version](https://badge.fury.io/py/openhanji.svg)](https://badge.fury.io/py/openhanji)
+[![Python Version](https://img.shields.io/pypi/pyversions/openhanji.svg)](https://pypi.org/project/openhanji/)
+[![Tests](https://github.com/sxa-lab/openhanji/actions/workflows/ci.yml/badge.svg)](https://github.com/sxa-lab/openhanji/actions/workflows/ci.yml)
+[![ReadTheDocs](https://img.shields.io/readthedocs/openhanji?label=ReadTheDocs)](https://openhanji.readthedocs.io/)
+
 **Open-source Python parser and converter for Hancom Office documents**
 
 `v0.1.0` parses HWPX documents into a structured Python document model that can be exported as:

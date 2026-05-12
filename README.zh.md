@@ -1,5 +1,10 @@
 [한국어](https://github.com/sxa-lab/openhanji/blob/main/README.md) | [English](https://github.com/sxa-lab/openhanji/blob/main/README.en.md) | [中文](https://github.com/sxa-lab/openhanji/blob/main/README.zh.md) | [许可证](https://github.com/sxa-lab/openhanji/blob/main/LICENSE) | [声明](https://github.com/sxa-lab/openhanji/blob/main/NOTICE)
 
+[![PyPI version](https://badge.fury.io/py/openhanji.svg)](https://badge.fury.io/py/openhanji)
+[![Python Version](https://img.shields.io/pypi/pyversions/openhanji.svg)](https://pypi.org/project/openhanji/)
+[![Tests](https://github.com/sxa-lab/openhanji/actions/workflows/ci.yml/badge.svg)](https://github.com/sxa-lab/openhanji/actions/workflows/ci.yml)
+[![ReadTheDocs](https://img.shields.io/readthedocs/openhanji?label=ReadTheDocs)](https://openhanji.readthedocs.io/)
+
 **用于 Hancom Office 文档的开源 Python 解析器和转换器**
 
 `v0.1.0` 将 HWPX 文档解析为结构化的 Python 文档模型，可导出为：
