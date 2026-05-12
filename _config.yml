@@ -1,0 +1,4 @@
+theme: jekyll-theme-architect
+title: openhanji
+description: Open-source Python parser and converter for Hancom Office documents.
+show_downloads: true
