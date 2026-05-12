@@ -8,7 +8,7 @@ consume HWPX files without depending on Hancom's proprietary stack.
 
 ## Highlights
 
-- **HWPX-native.** Parses the OWPML XML inside the HWPX zip directly; no
+- **Direct HWPX parsing.** Parses the OWPML XML inside the HWPX zip; no
   PDF or DOCX conversion step.
 - **Typed document model.** `Document`, `Paragraph`, `Run`, `Table`, `Cell`,
   `ImageRef`, `Metadata` — plain dataclasses, fully type-checked under
@@ -16,14 +16,14 @@ consume HWPX files without depending on Hancom's proprietary stack.
 - **Three output formats.** `openhanji.converters.json.to_json()`
   (structured data), `to_markdown()` (GFM + HTML fallback for complex
   tables), `to_text()` (recursive plain-text extraction).
-- **Tolerant by default.** Unknown XML is skipped and
-  logged at `WARNING`. Pass `strict=True` to escalate to exceptions.
-- **Format-native.** Hangul font faces are resolved from `header.xml` and
-  preserved in the run-level output. Heading detection handles both
-  structural (`outlineLevel`) and display-font heuristics.
-- **Fast by default.** Image binaries are skipped unless
-  `with_images=True`, so the common extraction path only reads XML and
-  metadata parts.
+- **Strict mode available.** Unknown XML is skipped and logged at
+  `WARNING`; pass `strict=True` to escalate it to an exception.
+- **Hancom metadata support.** Hangul font faces are resolved from
+  `header.xml` and preserved in the run-level output. Heading detection
+  handles both structural (`outlineLevel`) and display-font heuristics.
+- **Opt-in image binaries.** The parser records image positions without
+  reading binary payloads. Pass `with_images=True` when the bytes are
+  needed.
 
 ## Install
 
