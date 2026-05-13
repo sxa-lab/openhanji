@@ -1,6 +1,6 @@
 # openhanji
 
-**Open-source Python parser for Hancom Office HWPX documents.**
+**The best open-source Python parser for Hancom Office HWPX documents.**
 
 `openhanji` reads `.hwpx` files into a typed `Document` object and emits
 JSON, Markdown, or plain text. It is useful when Python systems need to
@@ -10,20 +10,15 @@ consume HWPX files without depending on Hancom's proprietary stack.
 
 - **Direct HWPX parsing.** Parses the OWPML XML inside the HWPX zip; no
   PDF or DOCX conversion step.
-- **Typed document model.** `Document`, `Paragraph`, `Run`, `Table`, `Cell`,
-  `ImageRef`, `Metadata` — plain dataclasses, fully type-checked under
-  `mypy --strict`.
+- **No Hancom Office dependency.** Read HWPX files on servers, pipelines,
+  and developer machines without installing Hancom Office.
 - **Three output formats.** `openhanji.converters.json.to_json()`
   (structured data), `to_markdown()` (GFM + HTML fallback for complex
   tables), `to_text()` (recursive plain-text extraction).
-- **Strict mode available.** Unknown XML is skipped and logged at
-  `WARNING`; pass `strict=True` to escalate it to an exception.
-- **Hancom metadata support.** Hangul font faces are resolved from
-  `header.xml` and preserved in the run-level output. Heading detection
-  handles both structural (`outlineLevel`) and display-font heuristics.
-- **Opt-in image binaries.** The parser records image positions without
-  reading binary payloads. Pass `with_images=True` when the bytes are
-  needed.
+- **Python API and CLI.** Use `openhanji.open()` in applications, or
+  `openhanji extract` for one-off files and directory batches.
+- **Search and RAG workflows.** Extract text, tables, metadata, headings,
+  and image references for indexing, retrieval, and backend previews.
 
 ## Install
 
