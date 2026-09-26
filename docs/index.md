@@ -1,5 +1,11 @@
 # openhanji
 
+[![PyPI version](https://badge.fury.io/py/openhanji.svg)](https://badge.fury.io/py/openhanji)
+[![Python Version](https://img.shields.io/pypi/pyversions/openhanji.svg)](https://pypi.org/project/openhanji/)
+[![Tests](https://github.com/sxa-lab/openhanji/actions/workflows/ci.yml/badge.svg)](https://github.com/sxa-lab/openhanji/actions/workflows/ci.yml)
+[![Downloads](https://static.pepy.tech/badge/openhanji)](https://pepy.tech/projects/openhanji?timeRange=threeMonths&category=version&includeCIDownloads=true&granularity=weekly&viewType=line&versions=Total%2C0)
+[![ReadTheDocs](https://img.shields.io/readthedocs/openhanji?label=ReadTheDocs)](https://openhanji.readthedocs.io/)
+
 **The best open-source Python parser for Hancom Office HWPX documents.**
 
 `openhanji` reads `.hwpx` files into a typed `Document` object and emits
